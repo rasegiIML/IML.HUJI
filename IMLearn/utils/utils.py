@@ -34,15 +34,15 @@ def split_train_test(X: pd.DataFrame, y: pd.Series, train_proportion: float = .2
 
     """
     n_samples = len(X)
-    n_training_samples = np.ceil(train_proportion * n_samples)
+    n_training_samples = int(np.ceil(train_proportion * n_samples))
     sample_inds = np.random.choice(range(n_samples), n_training_samples, replace=False)
 
     train_X = X.iloc[sample_inds]
-    non_sample_inds = ~X.index.isin(train_X.index)
-    test_X = X.iloc[non_sample_inds]
+    sample_inds_mask = X.index.isin(train_X.index)
+    test_X = X.iloc[~sample_inds_mask]
 
-    train_y = y[sample_inds]
-    test_y = y[non_sample_inds]
+    train_y = y[sample_inds_mask]
+    test_y = y[~sample_inds_mask]
 
     return train_X, train_y, test_X, test_y
 
