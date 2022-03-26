@@ -1,3 +1,4 @@
+from IMLearn import BaseEstimator
 from challenge.agoda_cancellation_estimator import AgodaCancellationEstimator
 from IMLearn.utils import split_train_test
 
@@ -20,14 +21,15 @@ def load_data(filename: str):
     2) Tuple of pandas.DataFrame and Series
     3) Tuple of ndarray of shape (n_samples, n_features) and ndarray of shape (n_samples,)
     """
-    # TODO - replace below code with any desired preprocessing
-    full_data = pd.read_csv(filename).dropna().drop_duplicates()
-    features = full_data[["h_booking_id",
-                          "hotel_id",
-                          "accommadation_type_name",
-                          "hotel_star_rating",
-                          "customer_nationality"]]
-    labels = full_data["cancellation_datetime"]
+    # TODO - add original_selling_amount column once the forum question is answered
+    RELEVANT_COLUMNS = ['hotel_star_rating',
+                        'no_of_adults',
+                        'no_of_children',
+                        'no_of_extra_bed',
+                        'no_of_room']
+    full_data = pd.read_csv(filename).drop_duplicates()
+    features = full_data[RELEVANT_COLUMNS]
+    labels = full_data["cancellation_datetime"].isna()
 
     return features, labels
 
