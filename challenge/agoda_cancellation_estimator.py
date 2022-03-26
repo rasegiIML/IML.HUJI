@@ -44,7 +44,7 @@ class AgodaCancellationEstimator(BaseEstimator):
         -----
 
         """
-        self.__fit_model = LogisticRegression(random_state=0).fit(X, y)
+        self.__fit_model = LogisticRegression(random_state=0, max_iter=np.inf).fit(X, y)
 
     def _predict(self, X: np.ndarray) -> np.ndarray:
         """
