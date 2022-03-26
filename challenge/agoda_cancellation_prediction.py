@@ -28,12 +28,21 @@ def load_data(filename: str):
                         'no_of_adults',
                         'no_of_children',
                         'no_of_extra_bed',
-                        'no_of_room']
-    full_data = pd.read_csv(filename).drop_duplicates()
+                        'no_of_room',
+                        'checkin_date',
+                        'checkout_date']
+    NONE_OUTPUT_COLUMNS = ['checkin_date',
+                           'checkout_date']
+    full_data = pd.read_csv(filename).drop_duplicates() \
+        .astype({'checkout_date': 'datetime64',
+                 'checkin_date': 'datetime64'})
     features = full_data[RELEVANT_COLUMNS]
+    # preprocessing
+    features['stay_length'] = (features.checkout_date - features.checkin_date).apply(lambda period: period.days)
+
     labels = full_data["cancellation_datetime"].isna()
 
-    return features, labels
+    return features.drop(NONE_OUTPUT_COLUMNS, axis='columns'), labels
 
 
 def evaluate_and_export(estimator: BaseEstimator, X: np.ndarray, filename: str):
