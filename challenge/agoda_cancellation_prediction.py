@@ -8,6 +8,10 @@ import numpy as np
 import pandas as pd
 
 
+def get_days_between_dates(dates1: pd.Series, dates2: pd.Series):
+    return (dates1 - dates2).apply(lambda period: period.days)
+
+
 def load_data(filename: str):
     """
     Load Agoda booking cancellation dataset
@@ -24,21 +28,24 @@ def load_data(filename: str):
     3) Tuple of ndarray of shape (n_samples, n_features) and ndarray of shape (n_samples,)
     """
     # TODO - add original_selling_amount column once the forum question is answered
+    NONE_OUTPUT_COLUMNS = ['checkin_date',
+                           'checkout_date',
+                           'booking_datetime']
     RELEVANT_COLUMNS = ['hotel_star_rating',
                         'no_of_adults',
                         'no_of_children',
                         'no_of_extra_bed',
-                        'no_of_room',
-                        'checkin_date',
-                        'checkout_date']
-    NONE_OUTPUT_COLUMNS = ['checkin_date',
-                           'checkout_date']
+                        'no_of_room'] + NONE_OUTPUT_COLUMNS
     full_data = pd.read_csv(filename).drop_duplicates() \
         .astype({'checkout_date': 'datetime64',
-                 'checkin_date': 'datetime64'})
+                 'checkin_date': 'datetime64',
+                 'booking_datetime': 'datetime64'})
     features = full_data[RELEVANT_COLUMNS]
+
     # preprocessing
-    features['stay_length'] = (features.checkout_date - features.checkin_date).apply(lambda period: period.days)
+    # TODO - move this into a separate function once it becomes too messy
+    features['stay_length'] = get_days_between_dates(features.checkout_date, features.checkin_date)
+    features['booking_to_arrival_time'] = get_days_between_dates(features.checkin_date, features.booking_datetime)
 
     labels = full_data["cancellation_datetime"].isna()
 
