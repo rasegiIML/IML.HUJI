@@ -1,5 +1,9 @@
 from __future__ import annotations
 from typing import NoReturn
+
+from sklearn.linear_model import LogisticRegression
+from sklearn.metrics import RocCurveDisplay
+
 from IMLearn.base import BaseEstimator
 import numpy as np
 
@@ -22,6 +26,7 @@ class AgodaCancellationEstimator(BaseEstimator):
 
         """
         super().__init__()
+        self.__fit_model: LogisticRegression = None
 
     def _fit(self, X: np.ndarray, y: np.ndarray) -> NoReturn:
         """
@@ -39,7 +44,7 @@ class AgodaCancellationEstimator(BaseEstimator):
         -----
 
         """
-        pass
+        self.__fit_model = LogisticRegression(random_state=0).fit(X, y)
 
     def _predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -55,7 +60,7 @@ class AgodaCancellationEstimator(BaseEstimator):
         responses : ndarray of shape (n_samples, )
             Predicted responses of given samples
         """
-        return np.zeros(X.shape[0])
+        return self.__fit_model.predict_proba(X)[:, 1]
 
     def _loss(self, X: np.ndarray, y: np.ndarray) -> float:
         """
