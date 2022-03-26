@@ -22,6 +22,7 @@ def process_categorical_data(features: pd.DataFrame, cat_vars: list, one_hot=Fal
         features = pd.get_dummies(features, columns=cat_vars)
 
     # category probability preprocessing - make each category have its success percentage
+    # TODO - return these dictionaries and add them to the pipeline
     if calc_probs:
         for cat_var in cat_vars:
             map_cat_to_prob: dict = features.groupby(cat_var, dropna=False).labels.mean().to_dict()
