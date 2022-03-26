@@ -31,11 +31,15 @@ def load_data(filename: str):
     NONE_OUTPUT_COLUMNS = ['checkin_date',
                            'checkout_date',
                            'booking_datetime']
-    RELEVANT_COLUMNS = ['hotel_star_rating',
-                        'no_of_adults',
+    CATEGORICAL_COLUMNS = ['hotel_star_rating',
+                           'guest_nationality_country_name',
+                           'charge_option',
+                           'hotel_brand_code',
+                           'request_earlycheckin']
+    RELEVANT_COLUMNS = ['no_of_adults',
                         'no_of_children',
                         'no_of_extra_bed',
-                        'no_of_room'] + NONE_OUTPUT_COLUMNS
+                        'no_of_room'] + NONE_OUTPUT_COLUMNS + CATEGORICAL_COLUMNS
     full_data = pd.read_csv(filename).drop_duplicates() \
         .astype({'checkout_date': 'datetime64',
                  'checkin_date': 'datetime64',
@@ -44,8 +48,13 @@ def load_data(filename: str):
 
     # preprocessing
     # TODO - move this into a separate function once it becomes too messy
+
+    # feature addition
     features['stay_length'] = get_days_between_dates(features.checkout_date, features.checkin_date)
     features['booking_to_arrival_time'] = get_days_between_dates(features.checkin_date, features.booking_datetime)
+
+    # one-hot encoding
+    features = pd.get_dummies(features, columns=CATEGORICAL_COLUMNS)
 
     labels = full_data["cancellation_datetime"].isna()
 
