@@ -65,4 +65,5 @@ if __name__ == '__main__':
     estimator = AgodaCancellationEstimator().fit(train_X, train_y)
 
     # Store model predictions over test set
-    evaluate_and_export(estimator, test_X, "id1_id2_id3.csv")
+    id1, id2, id3 = 209855253, 205843964, 212107536
+    evaluate_and_export(estimator, test_X, f"{id1}_{id2}_{id3}.csv")
