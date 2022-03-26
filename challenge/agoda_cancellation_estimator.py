@@ -80,3 +80,6 @@ class AgodaCancellationEstimator(BaseEstimator):
             Performance under loss function
         """
         pass
+
+    def plot_roc_curve(self, X: np.ndarray, y: np.ndarray):
+        RocCurveDisplay.from_estimator(self.__fit_model, X, y)
