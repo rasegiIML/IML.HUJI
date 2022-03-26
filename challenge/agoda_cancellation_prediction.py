@@ -34,7 +34,6 @@ def load_data(filename: str):
     CATEGORICAL_COLUMNS = ['hotel_star_rating',
                            'guest_nationality_country_name',
                            'charge_option',
-                           'hotel_brand_code',
                            'request_earlycheckin']
     RELEVANT_COLUMNS = ['no_of_adults',
                         'no_of_children',
