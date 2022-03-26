@@ -7,9 +7,36 @@ from IMLearn.utils import split_train_test
 import numpy as np
 import pandas as pd
 
+__DEBUG = True
+
 
 def get_days_between_dates(dates1: pd.Series, dates2: pd.Series):
     return (dates1 - dates2).apply(lambda period: period.days)
+
+
+def process_categorical_data(features: pd.DataFrame, cat_vars: list, one_hot=False, calc_probs=True) -> pd.DataFrame:
+    assert one_hot ^ calc_probs, \
+        'Error: can only do either one-hot encoding or probability calculations, not neither/both!'
+    # one-hot encoding
+    if one_hot:
+        features = pd.get_dummies(features, columns=cat_vars)
+
+    # category probability preprocessing - make each category have its success percentage
+    if calc_probs:
+        for cat_var in cat_vars:
+            map_cat_to_prob: dict = features.groupby(cat_var, dropna=False).labels.mean().to_dict()
+
+            features[cat_var] = features[cat_var].apply(map_cat_to_prob.get)
+
+            if __DEBUG:
+                plt.bar(*zip(*map_cat_to_prob.items()))
+                plt.title(f'{cat_var} no cancellation probability distribution')
+                while not plt.waitforbuttonpress(5):
+                    continue
+
+                plt.close()
+
+    return features
 
 
 def load_data(filename: str):
@@ -30,11 +57,17 @@ def load_data(filename: str):
     # TODO - add original_selling_amount column once the forum question is answered
     NONE_OUTPUT_COLUMNS = ['checkin_date',
                            'checkout_date',
-                           'booking_datetime']
+                           'booking_datetime',
+                           'hotel_live_date']
     CATEGORICAL_COLUMNS = ['hotel_star_rating',
                            'guest_nationality_country_name',
                            'charge_option',
-                           'request_earlycheckin']
+                           'accommadation_type_name',
+                           'language',
+                           'is_first_booking',
+                           'customer_nationality',
+                           'original_payment_currency',
+                           'is_user_logged_in']
     RELEVANT_COLUMNS = ['no_of_adults',
                         'no_of_children',
                         'no_of_extra_bed',
@@ -42,22 +75,22 @@ def load_data(filename: str):
     full_data = pd.read_csv(filename).drop_duplicates() \
         .astype({'checkout_date': 'datetime64',
                  'checkin_date': 'datetime64',
+                 'hotel_live_date': 'datetime64',
                  'booking_datetime': 'datetime64'})
     features = full_data[RELEVANT_COLUMNS]
+    features['labels'] = full_data["cancellation_datetime"].isna()
 
     # preprocessing
     # TODO - move this into a separate function once it becomes too messy
 
     # feature addition
     features['stay_length'] = get_days_between_dates(features.checkout_date, features.checkin_date)
+    features['time_registered_pre_book'] = get_days_between_dates(features.checkin_date, features.hotel_live_date)
     features['booking_to_arrival_time'] = get_days_between_dates(features.checkin_date, features.booking_datetime)
 
-    # one-hot encoding
-    features = pd.get_dummies(features, columns=CATEGORICAL_COLUMNS)
+    features = process_categorical_data(features, CATEGORICAL_COLUMNS)
 
-    labels = full_data["cancellation_datetime"].isna()
-
-    return features.drop(NONE_OUTPUT_COLUMNS, axis='columns'), labels
+    return features.drop(NONE_OUTPUT_COLUMNS + ['labels'], axis='columns'), features.labels
 
 
 def evaluate_and_export(estimator: BaseEstimator, X: np.ndarray, filename: str):
