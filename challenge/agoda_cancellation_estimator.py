@@ -27,7 +27,7 @@ class AgodaCancellationEstimatorKNN(BaseEstimator):
 
         """
         super().__init__()
-        self.__fit_model: LogisticRegression = None
+        self.__fit_model: KNeighborsClassifier = None
         self.__k = k
 
     def _fit(self, X: np.ndarray, y: np.ndarray) -> NoReturn:
