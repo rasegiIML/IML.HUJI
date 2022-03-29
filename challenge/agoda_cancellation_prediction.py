@@ -83,14 +83,26 @@ def get_days_until_policy(policy_code: str) -> list:
     return [int(policy.split('D')[0]) if 'D' in policy else 0 for policy in policies]
 
 
+def get_money_lost_per_policy(features: pd.Series):
+    policies = features.cancellation_policy_code.split('_')
+    stay_cost = features.original_selling_amount
+    stay_length = features.stay_length
+    policy_cost = [get_policy_cost(policy, stay_cost, stay_length) for policy in policies]
+
+    return policy_cost
+
+
 def add_cancellation_policy_features(features: pd.DataFrame) -> pd.DataFrame:
     cancellation_policy = features.cancellation_policy_code
     features['n_policies'] = cancellation_policy.apply(lambda policy: len(policy.split('_')))
     days_until_policy = cancellation_policy.apply(get_days_until_policy)
+    money_lost = features.apply(get_money_lost_per_policy, axis='columns')
 
     features['min_policy_days'] = days_until_policy.apply(min)
     features['max_policy_days'] = days_until_policy.apply(max)
 
+    features['min_policy_cost'] = money_lost.apply(min)
+    features['max_policy_cost'] = money_lost.apply(max)
 
     return features
 
@@ -130,7 +142,8 @@ def load_data(filename: str):
     RELEVANT_COLUMNS = ['no_of_adults',
                         'no_of_children',
                         'no_of_extra_bed',
-                        'no_of_room'] + NONE_OUTPUT_COLUMNS + CATEGORICAL_COLUMNS
+                        'no_of_room',
+                        'original_selling_amount'] + NONE_OUTPUT_COLUMNS + CATEGORICAL_COLUMNS
     full_data = pd.read_csv(filename).drop_duplicates() \
         .astype({'checkout_date': 'datetime64',
                  'checkin_date': 'datetime64',
