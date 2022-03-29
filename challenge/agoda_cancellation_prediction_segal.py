@@ -1,13 +1,13 @@
 from matplotlib import pyplot as plt
 
 from IMLearn import BaseEstimator
-from challenge.agoda_cancellation_estimator import AgodaCancellationEstimator
+from challenge.agoda_cancellation_estimator_segal import AgodaCancellationEstimator
 from IMLearn.utils import split_train_test
 
 import numpy as np
 import pandas as pd
-
-__DEBUG =False
+import datetime
+__DEBUG = True
 
 
 def get_days_between_dates(dates1: pd.Series, dates2: pd.Series):
@@ -40,6 +40,7 @@ def process_categorical_data(features: pd.DataFrame, cat_vars: list, one_hot=Fal
     return features
 
 
+
 def load_data(filename: str):
     """
     Load Agoda booking cancellation dataset
@@ -63,7 +64,7 @@ def load_data(filename: str):
     CATEGORICAL_COLUMNS = ['hotel_star_rating',
                            'guest_nationality_country_name',
                            'charge_option',
-                           'accommadation_type_name',
+                           'accommmadation_type_name',
                            'language',
                            'is_first_booking',
                            'customer_nationality',
@@ -90,6 +91,7 @@ def load_data(filename: str):
     features['booking_to_arrival_time'] = get_days_between_dates(features.checkin_date, features.booking_datetime)
 
     features = process_categorical_data(features, CATEGORICAL_COLUMNS)
+    validate_checkin_out_dates(features)
 
     return features.drop(NONE_OUTPUT_COLUMNS + ['labels'], axis='columns'), features.labels
 
@@ -116,33 +118,37 @@ def evaluate_and_export(estimator: BaseEstimator, X: np.ndarray, filename: str):
     pd.DataFrame(estimator.predict(X), columns=["predicted_values"]).to_csv(filename, index=False)
 
 
-def main():
-    ks = np.arange(1, 100)
-    np.random.seed(0)
-    df, cancellation_labels = load_data("../datasets/agoda_cancellation_train.csv")
-    train_X, train_y, test_X, test_y = split_train_test(df, cancellation_labels)
-    train_accuracy, test_accuracy = [], []
-    for k in ks:
-        print(k)
-        estimator = AgodaCancellationEstimator(k).fit(train_X, train_y)
-        train_accuracy.append(estimator.score(train_X, train_y))
-        print(train_accuracy[-1])
-        test_accuracy.append(estimator.score(test_X, test_y))
-        print(test_accuracy[-1])
-    plt.title('k-NN: Varying Number of Neighbors')
-    plt.plot(ks, test_accuracy, label='Testing Accuracy')
-    plt.plot(ks, train_accuracy, label='Training Accuracy')
-    plt.legend()
-    plt.xlabel('Number of Neighbors')
-    plt.ylabel('Accuracy')
-    plt.show()
+def year(date: str):
+    return int(date[6:10])
+def month(date: str):
+    return int(date[3:5])
+def day(date: str):
+    return int(date[:2])
+def convert_to_datetime(date: str):
+    return datetime.date(year(date), month(date), day(date))
 
 
-def novel_main():
+def validate_checkin_out_dates(data):
+
+    print("invalid dated amount:", len(data[data.checkin_date > data.checkout_date]))
+
+    return data[data.checkin_date > data.checkout_date]
+
+
+
+
+def data_validation(data):
+    pass
+
+
+
+
+if __name__ == '__main__':
     np.random.seed(0)
 
     # Load data
     df, cancellation_labels = load_data("../datasets/agoda_cancellation_train.csv")
+
     train_X, train_y, test_X, test_y = split_train_test(df, cancellation_labels)
 
     # Fit model over data
@@ -159,7 +165,3 @@ def novel_main():
     plt.ylim(0)
 
     plt.show()
-
-
-if __name__ == '__main__':
-    main()

@@ -2,7 +2,6 @@ from __future__ import annotations
 from typing import NoReturn
 
 from sklearn.linear_model import LogisticRegression
-from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import RocCurveDisplay
 
 from IMLearn.base import BaseEstimator
@@ -14,7 +13,7 @@ class AgodaCancellationEstimator(BaseEstimator):
     An estimator for solving the Agoda Cancellation challenge
     """
 
-    def __init__(self, k) -> AgodaCancellationEstimator:
+    def __init__(self) -> AgodaCancellationEstimator:
         """
         Instantiate an estimator for solving the Agoda Cancellation challenge
 
@@ -28,7 +27,6 @@ class AgodaCancellationEstimator(BaseEstimator):
         """
         super().__init__()
         self.__fit_model: LogisticRegression = None
-        self.__k = k
 
     def _fit(self, X: np.ndarray, y: np.ndarray) -> NoReturn:
         """
@@ -46,7 +44,7 @@ class AgodaCancellationEstimator(BaseEstimator):
         -----
 
         """
-        self.__fit_model = KNeighborsClassifier(self.__k).fit(X, y)
+        self.__fit_model = LogisticRegression(random_state=0, max_iter=np.inf).fit(X, y)
 
     def _predict(self, X: np.ndarray) -> np.ndarray:
         """
@@ -85,6 +83,3 @@ class AgodaCancellationEstimator(BaseEstimator):
 
     def plot_roc_curve(self, X: np.ndarray, y: np.ndarray):
         RocCurveDisplay.from_estimator(self.__fit_model, X, y)
-
-    def score(self, X, y):
-        return self.__fit_model.score(X, y)

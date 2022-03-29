@@ -1,13 +1,14 @@
 from matplotlib import pyplot as plt
 
 from IMLearn import BaseEstimator
-from challenge.agoda_cancellation_estimator import AgodaCancellationEstimator
+from challenge.agoda_cancellation_estimator_gideoni import AgodaCancellationEstimator
 from IMLearn.utils import split_train_test
 
 import numpy as np
 import pandas as pd
+import datetime
 
-__DEBUG =False
+__DEBUG = False
 
 
 def get_days_between_dates(dates1: pd.Series, dates2: pd.Series):
@@ -116,29 +117,7 @@ def evaluate_and_export(estimator: BaseEstimator, X: np.ndarray, filename: str):
     pd.DataFrame(estimator.predict(X), columns=["predicted_values"]).to_csv(filename, index=False)
 
 
-def main():
-    ks = np.arange(1, 100)
-    np.random.seed(0)
-    df, cancellation_labels = load_data("../datasets/agoda_cancellation_train.csv")
-    train_X, train_y, test_X, test_y = split_train_test(df, cancellation_labels)
-    train_accuracy, test_accuracy = [], []
-    for k in ks:
-        print(k)
-        estimator = AgodaCancellationEstimator(k).fit(train_X, train_y)
-        train_accuracy.append(estimator.score(train_X, train_y))
-        print(train_accuracy[-1])
-        test_accuracy.append(estimator.score(test_X, test_y))
-        print(test_accuracy[-1])
-    plt.title('k-NN: Varying Number of Neighbors')
-    plt.plot(ks, test_accuracy, label='Testing Accuracy')
-    plt.plot(ks, train_accuracy, label='Training Accuracy')
-    plt.legend()
-    plt.xlabel('Number of Neighbors')
-    plt.ylabel('Accuracy')
-    plt.show()
-
-
-def novel_main():
+if __name__ == '__main__':
     np.random.seed(0)
 
     # Load data
@@ -155,11 +134,9 @@ def novel_main():
     # plot results
     estimator.plot_roc_curve(test_X, test_y)
 
+    print(f'Accuracy score: {estimator.score(train_X, train_y)}')
+
     plt.xlim(0)
     plt.ylim(0)
 
     plt.show()
-
-
-if __name__ == '__main__':
-    main()
