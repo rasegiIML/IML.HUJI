@@ -9,6 +9,8 @@ from IMLearn.utils import split_train_test
 import numpy as np
 import pandas as pd
 
+from challenge.agoda_cancellation_estimator_gideoni import AgodaCancellationEstimator
+
 __DEBUG = False
 
 
@@ -44,10 +46,16 @@ def process_categorical_data(features: pd.DataFrame, cat_vars: list, one_hot=Fal
 
 def year(date: str):
     return int(date[6:10])
+
+
 def month(date: str):
     return int(date[3:5])
+
+
 def day(date: str):
     return int(date[:2])
+
+
 def convert_to_datetime(date: str):
     print(date)
 
@@ -63,11 +71,28 @@ def get_booked_on_weekend(dates):
 
 
 def get_weekend_holiday(in_date, out_date):
-    return list(map(lambda d: (d[1]-d[0]).days <= 3 and d[0].dayofweek >= 4, zip(in_date, out_date)))
+    return list(map(lambda d: (d[1] - d[0]).days <= 3 and d[0].dayofweek >= 4, zip(in_date, out_date)))
 
 
 def get_local_holiday(col1, col2):
     return list(map(lambda x: x[0] == x[1], zip(col1, col2)))
+
+
+def get_days_until_policy(policy_code: str) -> list:
+    policies = policy_code.split('_')
+    return [int(policy.split('D')[0]) if 'D' in policy else 0 for policy in policies]
+
+
+def add_cancellation_policy_features(features: pd.DataFrame) -> pd.DataFrame:
+    cancellation_policy = features.cancellation_policy_code
+    features['n_policies'] = cancellation_policy.apply(lambda policy: len(policy.split('_')))
+    days_until_policy = cancellation_policy.apply(get_days_until_policy)
+
+    features['min_policy_days'] = days_until_policy.apply(min)
+    features['max_policy_days'] = days_until_policy.apply(max)
+
+
+    return features
 
 
 def load_data(filename: str):
@@ -91,7 +116,8 @@ def load_data(filename: str):
                            'booking_datetime',
                            'hotel_live_date',
                            'hotel_country_code',
-                           'origin_country_code']
+                           'origin_country_code',
+                           'cancellation_policy_code']
     CATEGORICAL_COLUMNS = ['hotel_star_rating',
                            'guest_nationality_country_name',
                            'charge_option',
@@ -125,8 +151,11 @@ def load_data(filename: str):
     features['booked_on_weekend'] = get_booked_on_weekend(features.booking_datetime)
     features['is_weekend_holiday'] = get_weekend_holiday(features.checkin_date, features.checkout_date)
     features['is_local_holiday'] = get_local_holiday(features.origin_country_code, features.hotel_country_code)
+
     # TODO : check if customer is from holiday country
     features = process_categorical_data(features, CATEGORICAL_COLUMNS)
+
+    features = add_cancellation_policy_features(features)
 
     return features.drop(NONE_OUTPUT_COLUMNS + ['labels'], axis='columns'), features.labels
 
@@ -183,7 +212,7 @@ def novel_main():
     train_X, train_y, test_X, test_y = split_train_test(df, cancellation_labels)
 
     # Fit model over data
-    estimator = AgodaCancellationEstimatorKNN(15).fit(train_X, train_y)
+    estimator = AgodaCancellationEstimator().fit(train_X, train_y)
 
     # Store model predictions over test set
     id1, id2, id3 = 209855253, 205843964, 212107536
@@ -191,6 +220,7 @@ def novel_main():
 
     # plot results
     estimator.plot_roc_curve(test_X, test_y)
+    print(f'Accuracy score: {estimator.score(test_X, test_y)}')
 
     plt.xlim(0)
     plt.ylim(0)
