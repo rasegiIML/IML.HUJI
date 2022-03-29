@@ -1,13 +1,15 @@
+from datetime import datetime
+
 from matplotlib import pyplot as plt
 
 from IMLearn import BaseEstimator
-from challenge.agoda_cancellation_estimator import AgodaCancellationEstimator
+from challenge.agoda_cancellation_estimator import AgodaCancellationEstimatorKNN
 from IMLearn.utils import split_train_test
 
 import numpy as np
 import pandas as pd
 
-__DEBUG =False
+__DEBUG = False
 
 
 def get_days_between_dates(dates1: pd.Series, dates2: pd.Series):
@@ -40,6 +42,34 @@ def process_categorical_data(features: pd.DataFrame, cat_vars: list, one_hot=Fal
     return features
 
 
+def year(date: str):
+    return int(date[6:10])
+def month(date: str):
+    return int(date[3:5])
+def day(date: str):
+    return int(date[:2])
+def convert_to_datetime(date: str):
+    print(date)
+
+    return datetime.date(year(date), month(date), day(date))  # type: ignore
+
+
+def get_week_of_year(dates):
+    return dates.apply(lambda d: d.weekofyear)
+
+
+def get_booked_on_weekend(dates):
+    return dates.apply(lambda d: d.day_of_week >= 4)
+
+
+def get_weekend_holiday(in_date, out_date):
+    return list(map(lambda d: (d[1]-d[0]).days <= 3 and d[0].dayofweek >= 4, zip(in_date, out_date)))
+
+
+def get_local_holiday(col1, col2):
+    return list(map(lambda x: x[0] == x[1], zip(col1, col2)))
+
+
 def load_data(filename: str):
     """
     Load Agoda booking cancellation dataset
@@ -59,7 +89,9 @@ def load_data(filename: str):
     NONE_OUTPUT_COLUMNS = ['checkin_date',
                            'checkout_date',
                            'booking_datetime',
-                           'hotel_live_date']
+                           'hotel_live_date',
+                           'hotel_country_code',
+                           'origin_country_code']
     CATEGORICAL_COLUMNS = ['hotel_star_rating',
                            'guest_nationality_country_name',
                            'charge_option',
@@ -88,7 +120,12 @@ def load_data(filename: str):
     features['stay_length'] = get_days_between_dates(features.checkout_date, features.checkin_date)
     features['time_registered_pre_book'] = get_days_between_dates(features.checkin_date, features.hotel_live_date)
     features['booking_to_arrival_time'] = get_days_between_dates(features.checkin_date, features.booking_datetime)
-
+    features['checkin_week_of_year'] = get_week_of_year(features.checkin_date)
+    features['booking_week_of_year'] = get_week_of_year(features.booking_datetime)
+    features['booked_on_weekend'] = get_booked_on_weekend(features.booking_datetime)
+    features['is_weekend_holiday'] = get_weekend_holiday(features.checkin_date, features.checkout_date)
+    features['is_local_holiday'] = get_local_holiday(features.origin_country_code, features.hotel_country_code)
+    # TODO : check if customer is from holiday country
     features = process_categorical_data(features, CATEGORICAL_COLUMNS)
 
     return features.drop(NONE_OUTPUT_COLUMNS + ['labels'], axis='columns'), features.labels
@@ -117,14 +154,14 @@ def evaluate_and_export(estimator: BaseEstimator, X: np.ndarray, filename: str):
 
 
 def main():
-    ks = np.arange(1, 100)
+    ks = np.arange(27, 100)
     np.random.seed(0)
     df, cancellation_labels = load_data("../datasets/agoda_cancellation_train.csv")
     train_X, train_y, test_X, test_y = split_train_test(df, cancellation_labels)
     train_accuracy, test_accuracy = [], []
     for k in ks:
         print(k)
-        estimator = AgodaCancellationEstimator(k).fit(train_X, train_y)
+        estimator = AgodaCancellationEstimatorKNN(k).fit(train_X, train_y)
         train_accuracy.append(estimator.score(train_X, train_y))
         print(train_accuracy[-1])
         test_accuracy.append(estimator.score(test_X, test_y))
@@ -146,7 +183,7 @@ def novel_main():
     train_X, train_y, test_X, test_y = split_train_test(df, cancellation_labels)
 
     # Fit model over data
-    estimator = AgodaCancellationEstimator().fit(train_X, train_y)
+    estimator = AgodaCancellationEstimatorKNN(15).fit(train_X, train_y)
 
     # Store model predictions over test set
     id1, id2, id3 = 209855253, 205843964, 212107536
@@ -162,4 +199,4 @@ def novel_main():
 
 
 if __name__ == '__main__':
-    main()
+    novel_main()

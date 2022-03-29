@@ -9,12 +9,12 @@ from IMLearn.base import BaseEstimator
 import numpy as np
 
 
-class AgodaCancellationEstimator(BaseEstimator):
+class AgodaCancellationEstimatorKNN(BaseEstimator):
     """
     An estimator for solving the Agoda Cancellation challenge
     """
 
-    def __init__(self, k) -> AgodaCancellationEstimator:
+    def __init__(self, k) -> AgodaCancellationEstimatorKNN:
         """
         Instantiate an estimator for solving the Agoda Cancellation challenge
 
