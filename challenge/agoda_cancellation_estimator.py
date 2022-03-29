@@ -1,20 +1,22 @@
 from __future__ import annotations
 from typing import NoReturn
 
+from sklearn.ensemble import GradientBoostingClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import RocCurveDisplay
+from sklearn.tree import DecisionTreeClassifier
 
 from IMLearn.base import BaseEstimator
 import numpy as np
 
 
-class AgodaCancellationEstimatorKNN(BaseEstimator):
+class AgodaCancellationEstimator(BaseEstimator):
     """
     An estimator for solving the Agoda Cancellation challenge
     """
 
-    def __init__(self, k) -> AgodaCancellationEstimatorKNN:
+    def __init__(self) -> AgodaCancellationEstimator:
         """
         Instantiate an estimator for solving the Agoda Cancellation challenge
 
@@ -28,7 +30,6 @@ class AgodaCancellationEstimatorKNN(BaseEstimator):
         """
         super().__init__()
         self.__fit_model: KNeighborsClassifier = None
-        self.__k = k
 
     def _fit(self, X: np.ndarray, y: np.ndarray) -> NoReturn:
         """
@@ -46,7 +47,9 @@ class AgodaCancellationEstimatorKNN(BaseEstimator):
         -----
 
         """
-        self.__fit_model = KNeighborsClassifier(self.__k).fit(X, y)
+        # self.__fit_model = KNeighborsClassifier(self.__k).fit(X, y)
+
+        self.__fit_model = DecisionTreeClassifier(random_state=0).fit(X, y)
 
     def _predict(self, X: np.ndarray) -> np.ndarray:
         """

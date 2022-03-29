@@ -1,15 +1,16 @@
+import re
 from datetime import datetime
 
 from matplotlib import pyplot as plt
 
 from IMLearn import BaseEstimator
-from challenge.agoda_cancellation_estimator import AgodaCancellationEstimatorKNN
+from challenge.agoda_cancellation_estimator import AgodaCancellationEstimator
 from IMLearn.utils import split_train_test
 
 import numpy as np
 import pandas as pd
 
-from challenge.agoda_cancellation_estimator_gideoni import AgodaCancellationEstimator
+# from challenge.agoda_cancellation_estimator_gideoni import AgodaCancellationEstimator
 
 __DEBUG = False
 
@@ -83,26 +84,51 @@ def get_days_until_policy(policy_code: str) -> list:
     return [int(policy.split('D')[0]) if 'D' in policy else 0 for policy in policies]
 
 
-def get_money_lost_per_policy(features: pd.Series):
+def get_policy_cost(policy, stay_cost, stay_length, time_until_checkin):
+    """
+    returns tuple of the format (max lost, min lost, part min lost)
+    """
+    if policy == 'UNKNOWN':
+        return 0, 0, 0
+    nums = tuple(map(int, re.split('[a-zA-Z]', policy)[:-1]))
+    if 'D' not in policy: # no show is suppressed
+        return 0, 0, 0
+    if 'N' in policy:
+        nights_cost = stay_cost / stay_length * nums[0]
+        min_cost = nights_cost if time_until_checkin <= nums[1] else 0
+        return nights_cost, min_cost, min_cost / stay_cost
+    elif 'P' in policy:
+        nights_cost = stay_cost * nums[0] / 100
+        min_cost = nights_cost if time_until_checkin <= nums[1] else 0
+        return nights_cost, min_cost, min_cost / stay_cost
+    else:
+        raise Exception("Invalid Input")
+
+
+def get_money_lost_per_policy(features: pd.Series) -> list:
     policies = features.cancellation_policy_code.split('_')
     stay_cost = features.original_selling_amount
     stay_length = features.stay_length
-    policy_cost = [get_policy_cost(policy, stay_cost, stay_length) for policy in policies]
+    time_until_checkin = features.booking_to_arrival_time
+    policy_cost = [get_policy_cost(policy, stay_cost, stay_length, time_until_checkin) for policy in policies]
 
-    return policy_cost
+    return list(map(list, zip(*policy_cost)))
 
 
 def add_cancellation_policy_features(features: pd.DataFrame) -> pd.DataFrame:
     cancellation_policy = features.cancellation_policy_code
     features['n_policies'] = cancellation_policy.apply(lambda policy: len(policy.split('_')))
     days_until_policy = cancellation_policy.apply(get_days_until_policy)
-    money_lost = features.apply(get_money_lost_per_policy, axis='columns')
+    x = features.apply(get_money_lost_per_policy, axis='columns')
+    features['max_policy_cost'], features['min_policy_cost'], features['part_min_policy_cost'] = list(map(list, zip(*x)))
 
     features['min_policy_days'] = days_until_policy.apply(min)
     features['max_policy_days'] = days_until_policy.apply(max)
 
-    features['min_policy_cost'] = money_lost.apply(min)
-    features['max_policy_cost'] = money_lost.apply(max)
+    # TODO : this doesn't get the maximum, figure out why
+    features['min_policy_cost'] = features['min_policy_cost'].apply(min)
+    features['part_min_policy_cost'] = features['part_min_policy_cost'].apply(min)
+    features['max_policy_cost'] = features['min_policy_cost'].apply(max)
 
     return features
 
@@ -138,7 +164,8 @@ def load_data(filename: str):
                            'is_first_booking',
                            'customer_nationality',
                            'original_payment_currency',
-                           'is_user_logged_in']
+                           'is_user_logged_in',
+                           ]
     RELEVANT_COLUMNS = ['no_of_adults',
                         'no_of_children',
                         'no_of_extra_bed',
@@ -167,8 +194,7 @@ def load_data(filename: str):
 
     # TODO : check if customer is from holiday country
     features = process_categorical_data(features, CATEGORICAL_COLUMNS)
-
-    features = add_cancellation_policy_features(features)
+    # features = add_cancellation_policy_features(features)
 
     return features.drop(NONE_OUTPUT_COLUMNS + ['labels'], axis='columns'), features.labels
 
