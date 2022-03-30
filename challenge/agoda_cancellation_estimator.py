@@ -16,7 +16,7 @@ class AgodaCancellationEstimator(BaseEstimator):
     An estimator for solving the Agoda Cancellation challenge
     """
 
-    def __init__(self) -> AgodaCancellationEstimator:
+    def __init__(self, threshold: float) -> AgodaCancellationEstimator:
         """
         Instantiate an estimator for solving the Agoda Cancellation challenge
 
@@ -30,6 +30,7 @@ class AgodaCancellationEstimator(BaseEstimator):
         """
         super().__init__()
         self.__fit_model: RandomForestClassifier = None
+        self.thresh = threshold
 
     def _fit(self, X: np.ndarray, y: np.ndarray) -> NoReturn:
         """
@@ -63,7 +64,8 @@ class AgodaCancellationEstimator(BaseEstimator):
         responses : ndarray of shape (n_samples, )
             Predicted responses of given samples
         """
-        return self.__fit_model.predict_proba(X)[:, 1]
+        probs = self.__fit_model.predict_proba(X)[:, 1]
+        return probs < self.thresh if self.thresh is not None else probs
 
     def _loss(self, X: np.ndarray, y: np.ndarray) -> float:
         """

@@ -231,7 +231,8 @@ def evaluate_and_export(estimator: BaseEstimator, X: pd.DataFrame, filename: str
     pd.DataFrame(estimator.predict(X), columns=["predicted_values"]).to_csv(filename, index=False)
 
 
-def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", debug=False) -> Pipeline:
+def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", threshold: float = None,
+                               debug=False) -> Pipeline:
     np.random.seed(0)
 
     # Load data
@@ -242,7 +243,7 @@ def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", 
     processed_test_X = pipeline.transform(test_X)
 
     # Fit model over data
-    estimator = AgodaCancellationEstimator().fit(train_X, train_y)
+    estimator = AgodaCancellationEstimator(threshold).fit(train_X, train_y)
     pipeline.steps.append(('estimator', estimator))
 
     # plot results
