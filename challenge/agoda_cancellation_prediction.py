@@ -249,7 +249,7 @@ def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", 
 
     if optimize_threshold:
         unopt_est = AgodaCancellationEstimator()
-        param_optim = GridSearchCV(unopt_est, {'threshold': np.linspace(0, 1, num=4)})
+        param_optim = GridSearchCV(unopt_est, {'threshold': np.linspace(0, 1)})
         param_optim.fit(train_X, train_y)
         print(f'Optimal params: {param_optim.best_params_}')
         estimator.thresh = param_optim.best_params_['threshold']
