@@ -112,7 +112,7 @@ def add_cancellation_policy_features(features: pd.DataFrame) -> pd.DataFrame:
     # TODO : this doesn't get the maximum, figure out why
     features['min_policy_cost'] = features['min_policy_cost'].apply(min)
     features['part_min_policy_cost'] = features['part_min_policy_cost'].apply(min)
-    features['max_policy_cost'] = features['min_policy_cost'].apply(max)
+    features['max_policy_cost'] = features['max_policy_cost'].apply(max)
 
     return features
 
@@ -132,7 +132,6 @@ def load_data(filename: str):
     2) Tuple of pandas.DataFrame and Series
     3) Tuple of ndarray of shape (n_samples, n_features) and ndarray of shape (n_samples,)
     """
-    # TODO - add original_selling_amount column once the forum question is answered
     NONE_OUTPUT_COLUMNS = ['checkin_date',
                            'checkout_date',
                            'booking_datetime',
@@ -178,7 +177,7 @@ def load_data(filename: str):
 
     # TODO : check if customer is from holiday country
     features = process_categorical_data(features, CATEGORICAL_COLUMNS)
-    # features = add_cancellation_policy_features(features)
+    features = add_cancellation_policy_features(features)
 
     return features.drop(NONE_OUTPUT_COLUMNS + ['labels'], axis='columns'), features.labels
 
