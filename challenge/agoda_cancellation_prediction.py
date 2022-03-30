@@ -21,6 +21,31 @@ def get_days_between_dates(dates1: pd.Series, dates2: pd.Series):
     return (dates1 - dates2).apply(lambda period: period.days)
 
 
+def add_categorical_prep_to_pipe(train_features: pd.DataFrame, pipeline: Pipeline, cat_vars: list, one_hot=False,
+                                 calc_probs=True) -> Pipeline:
+    assert one_hot ^ calc_probs, \
+        'Error: can only do either one-hot encoding or probability calculations, not neither/both!'
+    # one-hot encoding
+    if one_hot:
+        # TODO - use sklearn OneHotEncoder
+        pipeline.steps.append(('one-hot encoding',
+                               FunctionTransformer(lambda df: pd.get_dummies(df, columns=cat_vars))))
+
+    # category probability preprocessing - make each category have its success percentage
+    if calc_probs:
+        for cat_var in cat_vars:
+            map_cat_to_prob: dict = train_features.groupby(cat_var, dropna=False).labels.mean().to_dict()
+
+            def map_cat_col(df: pd.DataFrame) -> pd.DataFrame:
+                df[cat_var] = df[cat_var].apply(map_cat_to_prob.get)
+
+                return df
+
+            pipeline.steps.append((f'map {cat_var} to prob', FunctionTransformer(map_cat_col)))
+
+    return pipeline
+
+
 def process_categorical_data(features: pd.DataFrame, cat_vars: list, one_hot=False, calc_probs=True) -> pd.DataFrame:
     assert one_hot ^ calc_probs, \
         'Error: can only do either one-hot encoding or probability calculations, not neither/both!'
@@ -162,7 +187,7 @@ def create_pipeline_from_data(filename: str):
                  'hotel_live_date': 'datetime64',
                  'booking_datetime': 'datetime64'})
 
-    pipeline = Pipeline([('columns selector', FunctionTransformer(lambda df: df[RELEVANT_COLUMNS]))])
+    pipeline_steps = [('columns selector', FunctionTransformer(lambda df: df[RELEVANT_COLUMNS]))]
 
     features['labels'] = features["cancellation_datetime"].isna()
 
@@ -183,11 +208,13 @@ def create_pipeline_from_data(filename: str):
 
         return df
 
-    pipeline.steps.append(('add time based columns', FunctionTransformer(add_time_based_cols)))
+    pipeline_steps.append(('add time based columns', FunctionTransformer(add_time_based_cols)))
 
     # TODO : check if customer is from holiday country
-    # features = process_categorical_data(features, CATEGORICAL_COLUMNS)
-    # features = add_cancellation_policy_features(features)
+    pipeline = Pipeline(pipeline_steps)
+    pipeline = add_categorical_prep_to_pipe(features, pipeline, CATEGORICAL_COLUMNS)
+
+    pipeline.steps.append(('add cancellation policy features', FunctionTransformer(add_cancellation_policy_features)))
 
     pipeline.steps.append(('drop irrelevant columns',
                            FunctionTransformer(lambda df: df.drop(NONE_OUTPUT_COLUMNS, axis='columns'))))
@@ -287,6 +314,9 @@ def novel_main():
 
     # Load data
     df, cancellation_labels = load_data("../datasets/agoda_cancellation_train.csv")
+    raw_df, _, prep_pipe = create_pipeline_from_data("../datasets/agoda_cancellation_train.csv")
+    pipe_res = prep_pipe.transform(raw_df)
+
     train_X, train_y, test_X, test_y = split_train_test(df, cancellation_labels)
 
     # Fit model over data
