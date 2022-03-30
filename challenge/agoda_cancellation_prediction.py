@@ -1,4 +1,5 @@
 import re
+from copy import copy
 from datetime import datetime
 
 from matplotlib import pyplot as plt
@@ -21,6 +22,17 @@ def get_days_between_dates(dates1: pd.Series, dates2: pd.Series):
     return (dates1 - dates2).apply(lambda period: period.days)
 
 
+def create_col_prob_mapper(col: str, mapper: dict):
+    mapper = copy(mapper)
+
+    def map_col_to_prob(df):
+        df[col] = df[col].apply(mapper.get)
+
+        return df
+
+    return map_col_to_prob
+
+
 def add_categorical_prep_to_pipe(train_features: pd.DataFrame, pipeline: Pipeline, cat_vars: list, one_hot=False,
                                  calc_probs=True) -> Pipeline:
     assert one_hot ^ calc_probs, \
@@ -36,12 +48,8 @@ def add_categorical_prep_to_pipe(train_features: pd.DataFrame, pipeline: Pipelin
         for cat_var in cat_vars:
             map_cat_to_prob: dict = train_features.groupby(cat_var, dropna=False).labels.mean().to_dict()
 
-            def map_cat_col(df: pd.DataFrame) -> pd.DataFrame:
-                df[cat_var] = df[cat_var].apply(map_cat_to_prob.get)
-
-                return df
-
-            pipeline.steps.append((f'map {cat_var} to prob', FunctionTransformer(map_cat_col)))
+            pipeline.steps.append((f'map {cat_var} to prob',
+                                   FunctionTransformer(create_col_prob_mapper(cat_var, map_cat_to_prob))))
 
     return pipeline
 
