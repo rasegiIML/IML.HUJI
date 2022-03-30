@@ -1,7 +1,7 @@
 from __future__ import annotations
 from typing import NoReturn
 
-from sklearn.ensemble import GradientBoostingClassifier
+from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
 from sklearn.metrics import RocCurveDisplay
@@ -29,7 +29,7 @@ class AgodaCancellationEstimator(BaseEstimator):
 
         """
         super().__init__()
-        self.__fit_model: LogisticRegression = None
+        self.__fit_model: RandomForestClassifier = None
 
     def _fit(self, X: np.ndarray, y: np.ndarray) -> NoReturn:
         """
@@ -47,7 +47,7 @@ class AgodaCancellationEstimator(BaseEstimator):
         -----
 
         """
-        self.__fit_model = LogisticRegression(random_state=0).fit(X, y)
+        self.__fit_model = RandomForestClassifier(random_state=0).fit(X, y)
 
     def _predict(self, X: np.ndarray) -> np.ndarray:
         """

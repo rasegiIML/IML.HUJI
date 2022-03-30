@@ -2,6 +2,8 @@ import re
 from datetime import datetime
 
 from matplotlib import pyplot as plt
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import FunctionTransformer
 
 from IMLearn import BaseEstimator
 from challenge.agoda_cancellation_estimator import AgodaCancellationEstimator
@@ -109,12 +111,88 @@ def add_cancellation_policy_features(features: pd.DataFrame) -> pd.DataFrame:
     features['min_policy_days'] = days_until_policy.apply(min)
     features['max_policy_days'] = days_until_policy.apply(max)
 
-    # TODO : this doesn't get the maximum, figure out why
     features['min_policy_cost'] = features['min_policy_cost'].apply(min)
     features['part_min_policy_cost'] = features['part_min_policy_cost'].apply(min)
     features['max_policy_cost'] = features['max_policy_cost'].apply(max)
 
     return features
+
+
+def create_pipeline_from_data(filename: str):
+    """
+    Load Agoda booking cancellation dataset
+    Parameters
+    ----------
+    filename: str
+        Path to house prices dataset
+
+    Returns
+    -------
+    Design matrix and response vector in either of the following formats:
+    1) Single dataframe with last column representing the response
+    2) Tuple of pandas.DataFrame and Series
+    3) Tuple of ndarray of shape (n_samples, n_features) and ndarray of shape (n_samples,)
+    """
+
+    NONE_OUTPUT_COLUMNS = ['checkin_date',
+                           'checkout_date',
+                           'booking_datetime',
+                           'hotel_live_date',
+                           'hotel_country_code',
+                           'origin_country_code',
+                           'cancellation_policy_code']
+    CATEGORICAL_COLUMNS = ['hotel_star_rating',
+                           'guest_nationality_country_name',
+                           'charge_option',
+                           'accommadation_type_name',
+                           'language',
+                           'is_first_booking',
+                           'customer_nationality',
+                           'original_payment_currency',
+                           'is_user_logged_in',
+                           ]
+    RELEVANT_COLUMNS = ['no_of_adults',
+                        'no_of_children',
+                        'no_of_extra_bed',
+                        'no_of_room',
+                        'original_selling_amount'] + NONE_OUTPUT_COLUMNS + CATEGORICAL_COLUMNS
+    features = pd.read_csv(filename).drop_duplicates() \
+        .astype({'checkout_date': 'datetime64',
+                 'checkin_date': 'datetime64',
+                 'hotel_live_date': 'datetime64',
+                 'booking_datetime': 'datetime64'})
+
+    pipeline = Pipeline([('columns selector', FunctionTransformer(lambda df: df[RELEVANT_COLUMNS]))])
+
+    features['labels'] = features["cancellation_datetime"].isna()
+
+    # preprocessing
+    # TODO - move this into a separate function once it becomes too messy
+
+    # feature addition
+
+    def add_time_based_cols(df: pd.DataFrame) -> pd.DataFrame:
+        df['stay_length'] = get_days_between_dates(df.checkout_date, df.checkin_date)
+        df['time_registered_pre_book'] = get_days_between_dates(df.checkin_date, df.hotel_live_date)
+        df['booking_to_arrival_time'] = get_days_between_dates(df.checkin_date, df.booking_datetime)
+        df['checkin_week_of_year'] = get_week_of_year(df.checkin_date)
+        df['booking_week_of_year'] = get_week_of_year(df.booking_datetime)
+        df['booked_on_weekend'] = get_booked_on_weekend(df.booking_datetime)
+        df['is_weekend_holiday'] = get_weekend_holiday(df.checkin_date, df.checkout_date)
+        df['is_local_holiday'] = get_local_holiday(df.origin_country_code, df.hotel_country_code)
+
+        return df
+
+    pipeline.steps.append(('add time based columns', FunctionTransformer(add_time_based_cols)))
+
+    # TODO : check if customer is from holiday country
+    # features = process_categorical_data(features, CATEGORICAL_COLUMNS)
+    # features = add_cancellation_policy_features(features)
+
+    pipeline.steps.append(('drop irrelevant columns',
+                           FunctionTransformer(lambda df: df.drop(NONE_OUTPUT_COLUMNS, axis='columns'))))
+
+    return features.drop('labels', axis='columns'), features.labels, pipeline
 
 
 def load_data(filename: str):
@@ -202,28 +280,6 @@ def evaluate_and_export(estimator: BaseEstimator, X: np.ndarray, filename: str):
 
     """
     pd.DataFrame(estimator.predict(X), columns=["predicted_values"]).to_csv(filename, index=False)
-
-
-def main():
-    ks = np.arange(27, 100)
-    np.random.seed(0)
-    df, cancellation_labels = load_data("../datasets/agoda_cancellation_train.csv")
-    train_X, train_y, test_X, test_y = split_train_test(df, cancellation_labels)
-    train_accuracy, test_accuracy = [], []
-    for k in ks:
-        print(k)
-        estimator = AgodaCancellationEstimatorKNN(k).fit(train_X, train_y)
-        train_accuracy.append(estimator.score(train_X, train_y))
-        print(train_accuracy[-1])
-        test_accuracy.append(estimator.score(test_X, test_y))
-        print(test_accuracy[-1])
-    plt.title('k-NN: Varying Number of Neighbors')
-    plt.plot(ks, test_accuracy, label='Testing Accuracy')
-    plt.plot(ks, train_accuracy, label='Training Accuracy')
-    plt.legend()
-    plt.xlabel('Number of Neighbors')
-    plt.ylabel('Accuracy')
-    plt.show()
 
 
 def novel_main():
