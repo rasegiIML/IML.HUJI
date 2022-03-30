@@ -29,7 +29,7 @@ class AgodaCancellationEstimator(BaseEstimator):
 
         """
         super().__init__()
-        self.__fit_model: KNeighborsClassifier = None
+        self.__fit_model: LogisticRegression = None
 
     def _fit(self, X: np.ndarray, y: np.ndarray) -> NoReturn:
         """
@@ -47,9 +47,7 @@ class AgodaCancellationEstimator(BaseEstimator):
         -----
 
         """
-        # self.__fit_model = KNeighborsClassifier(self.__k).fit(X, y)
-
-        self.__fit_model = DecisionTreeClassifier(random_state=0).fit(X, y)
+        self.__fit_model = LogisticRegression(random_state=0).fit(X, y)
 
     def _predict(self, X: np.ndarray) -> np.ndarray:
         """

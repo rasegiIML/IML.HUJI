@@ -45,24 +45,6 @@ def process_categorical_data(features: pd.DataFrame, cat_vars: list, one_hot=Fal
     return features
 
 
-def year(date: str):
-    return int(date[6:10])
-
-
-def month(date: str):
-    return int(date[3:5])
-
-
-def day(date: str):
-    return int(date[:2])
-
-
-def convert_to_datetime(date: str):
-    print(date)
-
-    return datetime.date(year(date), month(date), day(date))  # type: ignore
-
-
 def get_week_of_year(dates):
     return dates.apply(lambda d: d.weekofyear)
 
@@ -91,7 +73,7 @@ def get_policy_cost(policy, stay_cost, stay_length, time_until_checkin):
     if policy == 'UNKNOWN':
         return 0, 0, 0
     nums = tuple(map(int, re.split('[a-zA-Z]', policy)[:-1]))
-    if 'D' not in policy: # no show is suppressed
+    if 'D' not in policy:  # no show is suppressed
         return 0, 0, 0
     if 'N' in policy:
         nights_cost = stay_cost / stay_length * nums[0]
@@ -116,11 +98,13 @@ def get_money_lost_per_policy(features: pd.Series) -> list:
 
 
 def add_cancellation_policy_features(features: pd.DataFrame) -> pd.DataFrame:
+    # TODO - clean this up and make it work
     cancellation_policy = features.cancellation_policy_code
     features['n_policies'] = cancellation_policy.apply(lambda policy: len(policy.split('_')))
     days_until_policy = cancellation_policy.apply(get_days_until_policy)
     x = features.apply(get_money_lost_per_policy, axis='columns')
-    features['max_policy_cost'], features['min_policy_cost'], features['part_min_policy_cost'] = list(map(list, zip(*x)))
+    features['max_policy_cost'], features['min_policy_cost'], features['part_min_policy_cost'] = list(
+        map(list, zip(*x)))
 
     features['min_policy_days'] = days_until_policy.apply(min)
     features['max_policy_days'] = days_until_policy.apply(max)
