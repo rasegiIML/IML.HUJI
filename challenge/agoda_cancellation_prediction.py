@@ -257,12 +257,13 @@ def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", 
     # plot results
     if debug:
         estimator.plot_roc_curve(processed_test_X, test_y)
-        print(f'Accuracy score: {estimator.score(processed_test_X, test_y)}')
 
         plt.xlim(0)
         plt.ylim(0)
 
         plt.show()
+
+    print(f'Accuracy score on test data: {estimator.score(processed_test_X, test_y)}')
 
     return pipeline
 
