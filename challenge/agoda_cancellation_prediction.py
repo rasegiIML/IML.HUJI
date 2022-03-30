@@ -4,6 +4,7 @@ from datetime import datetime
 from typing import NoReturn
 
 from matplotlib import pyplot as plt
+from sklearn.model_selection import GridSearchCV
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
 
@@ -232,7 +233,7 @@ def evaluate_and_export(estimator: BaseEstimator, X: pd.DataFrame, filename: str
 
 
 def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", threshold: float = None,
-                               debug=False) -> Pipeline:
+                               optimize_threshold=True, debug=False) -> Pipeline:
     np.random.seed(0)
 
     # Load data
@@ -245,6 +246,13 @@ def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", 
     # Fit model over data
     estimator = AgodaCancellationEstimator(threshold).fit(train_X, train_y)
     pipeline.steps.append(('estimator', estimator))
+
+    if optimize_threshold:
+        unopt_est = AgodaCancellationEstimator()
+        param_optim = GridSearchCV(unopt_est, {'threshold': np.linspace(0, 1, num=4)})
+        param_optim.fit(train_X, train_y)
+        print(f'Optimal params: {param_optim.best_params_}')
+        estimator.thresh = param_optim.best_params_['threshold']
 
     # plot results
     if debug:

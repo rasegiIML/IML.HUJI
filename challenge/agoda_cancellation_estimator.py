@@ -1,10 +1,11 @@
 from __future__ import annotations
 from typing import NoReturn
 
+import pandas as pd
 from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
 from sklearn.linear_model import LogisticRegression
 from sklearn.neighbors import KNeighborsClassifier
-from sklearn.metrics import RocCurveDisplay
+from sklearn.metrics import RocCurveDisplay, accuracy_score
 from sklearn.tree import DecisionTreeClassifier
 
 from IMLearn.base import BaseEstimator
@@ -16,7 +17,7 @@ class AgodaCancellationEstimator(BaseEstimator):
     An estimator for solving the Agoda Cancellation challenge
     """
 
-    def __init__(self, threshold: float) -> AgodaCancellationEstimator:
+    def __init__(self, threshold: float = None) -> AgodaCancellationEstimator:
         """
         Instantiate an estimator for solving the Agoda Cancellation challenge
 
@@ -31,6 +32,14 @@ class AgodaCancellationEstimator(BaseEstimator):
         super().__init__()
         self.__fit_model: RandomForestClassifier = None
         self.thresh = threshold
+
+    def get_params(self, deep=False):
+        return {'threshold': self.thresh}
+
+    def set_params(self, threshold) -> AgodaCancellationEstimator:
+        self.thresh = threshold
+
+        return self
 
     def _fit(self, X: np.ndarray, y: np.ndarray) -> NoReturn:
         """
@@ -50,7 +59,7 @@ class AgodaCancellationEstimator(BaseEstimator):
         """
         self.__fit_model = RandomForestClassifier(random_state=0).fit(X, y)
 
-    def _predict(self, X: np.ndarray) -> np.ndarray:
+    def _predict(self, X: pd.DataFrame) -> np.ndarray:
         """
         Predict responses for given samples using fitted estimator
 
@@ -89,5 +98,5 @@ class AgodaCancellationEstimator(BaseEstimator):
     def plot_roc_curve(self, X: np.ndarray, y: np.ndarray):
         RocCurveDisplay.from_estimator(self.__fit_model, X, y)
 
-    def score(self, X, y):
-        return self.__fit_model.score(X, y)
+    def score(self, X: pd.DataFrame, y: pd.Series):
+        return accuracy_score(y, self._predict(X))
