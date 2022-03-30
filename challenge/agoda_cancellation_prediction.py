@@ -19,6 +19,14 @@ import pandas as pd
 __DEBUG = False
 
 
+def read_data_file(path: str) -> pd.DataFrame:
+    return pd.read_csv(path).drop_duplicates() \
+        .astype({'checkout_date': 'datetime64',
+                 'checkin_date': 'datetime64',
+                 'hotel_live_date': 'datetime64',
+                 'booking_datetime': 'datetime64'})
+
+
 def get_days_between_dates(dates1: pd.Series, dates2: pd.Series):
     return (dates1 - dates2).apply(lambda period: period.days)
 
@@ -164,11 +172,7 @@ def create_pipeline_from_data(filename: str):
                         'no_of_extra_bed',
                         'no_of_room',
                         'original_selling_amount'] + NONE_OUTPUT_COLUMNS + CATEGORICAL_COLUMNS
-    features = pd.read_csv(filename).drop_duplicates() \
-        .astype({'checkout_date': 'datetime64',
-                 'checkin_date': 'datetime64',
-                 'hotel_live_date': 'datetime64',
-                 'booking_datetime': 'datetime64'})
+    features = read_data_file(filename)
 
     pipeline_steps = [('columns selector', FunctionTransformer(lambda df: df[RELEVANT_COLUMNS]))]
 
@@ -205,7 +209,7 @@ def create_pipeline_from_data(filename: str):
     return features.drop('labels', axis='columns'), features.labels, pipeline
 
 
-def evaluate_and_export(estimator: BaseEstimator, X: np.ndarray, filename: str):
+def evaluate_and_export(estimator: BaseEstimator, X: pd.DataFrame, filename: str):
     """
     Export to specified file the prediction results of given estimator on given testset.
 
@@ -217,7 +221,7 @@ def evaluate_and_export(estimator: BaseEstimator, X: np.ndarray, filename: str):
     estimator: BaseEstimator or any object implementing predict() method as in BaseEstimator (for example sklearn)
         Fitted estimator to use for prediction
 
-    X: ndarray of shape (n_samples, n_features)
+    X: pd.DataFrame of shape (n_samples, n_features)
         Test design matrix to predict its responses
 
     filename:
@@ -241,10 +245,6 @@ def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", 
     estimator = AgodaCancellationEstimator().fit(train_X, train_y)
     pipeline.steps.append(('estimator', estimator))
 
-    # Store model predictions over test set
-    id1, id2, id3 = 209855253, 205843964, 212107536
-    evaluate_and_export(pipeline, test_X, f"{id1}_{id2}_{id3}.csv")
-
     # plot results
     if debug:
         estimator.plot_roc_curve(processed_test_X, test_y)
@@ -258,8 +258,12 @@ def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", 
     return pipeline
 
 
-def export_test_data(pipeline: Pipeline, path='') -> NoReturn:
-    pass
+def export_test_data(pipeline: Pipeline, path="../datasets/test_set_week_1.csv") -> NoReturn:
+    data = read_data_file(path)
+
+    # Store model predictions over test set
+    id1, id2, id3 = 209855253, 205843964, 212107536
+    evaluate_and_export(pipeline, data, f"{id1}_{id2}_{id3}.csv")
 
 
 if __name__ == '__main__':
