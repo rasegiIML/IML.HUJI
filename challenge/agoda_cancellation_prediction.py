@@ -1,6 +1,7 @@
 import re
 from copy import copy
 from datetime import datetime
+from typing import NoReturn
 
 from matplotlib import pyplot as plt
 from sklearn.pipeline import Pipeline
@@ -52,32 +53,6 @@ def add_categorical_prep_to_pipe(train_features: pd.DataFrame, pipeline: Pipelin
                                    FunctionTransformer(create_col_prob_mapper(cat_var, map_cat_to_prob))))
 
     return pipeline
-
-
-def process_categorical_data(features: pd.DataFrame, cat_vars: list, one_hot=False, calc_probs=True) -> pd.DataFrame:
-    assert one_hot ^ calc_probs, \
-        'Error: can only do either one-hot encoding or probability calculations, not neither/both!'
-    # one-hot encoding
-    if one_hot:
-        features = pd.get_dummies(features, columns=cat_vars)
-
-    # category probability preprocessing - make each category have its success percentage
-    # TODO - return these dictionaries and add them to the pipeline
-    if calc_probs:
-        for cat_var in cat_vars:
-            map_cat_to_prob: dict = features.groupby(cat_var, dropna=False).labels.mean().to_dict()
-
-            features[cat_var] = features[cat_var].apply(map_cat_to_prob.get)
-
-            if __DEBUG:
-                plt.bar(*zip(*map_cat_to_prob.items()))
-                plt.title(f'{cat_var} no cancellation probability distribution')
-                while not plt.waitforbuttonpress(5):
-                    continue
-
-                plt.close()
-
-    return features
 
 
 def get_week_of_year(dates):
@@ -230,71 +205,6 @@ def create_pipeline_from_data(filename: str):
     return features.drop('labels', axis='columns'), features.labels, pipeline
 
 
-def load_data(filename: str):
-    """
-    Load Agoda booking cancellation dataset
-    Parameters
-    ----------
-    filename: str
-        Path to house prices dataset
-
-    Returns
-    -------
-    Design matrix and response vector in either of the following formats:
-    1) Single dataframe with last column representing the response
-    2) Tuple of pandas.DataFrame and Series
-    3) Tuple of ndarray of shape (n_samples, n_features) and ndarray of shape (n_samples,)
-    """
-    NONE_OUTPUT_COLUMNS = ['checkin_date',
-                           'checkout_date',
-                           'booking_datetime',
-                           'hotel_live_date',
-                           'hotel_country_code',
-                           'origin_country_code',
-                           'cancellation_policy_code']
-    CATEGORICAL_COLUMNS = ['hotel_star_rating',
-                           'guest_nationality_country_name',
-                           'charge_option',
-                           'accommadation_type_name',
-                           'language',
-                           'is_first_booking',
-                           'customer_nationality',
-                           'original_payment_currency',
-                           'is_user_logged_in',
-                           ]
-    RELEVANT_COLUMNS = ['no_of_adults',
-                        'no_of_children',
-                        'no_of_extra_bed',
-                        'no_of_room',
-                        'original_selling_amount'] + NONE_OUTPUT_COLUMNS + CATEGORICAL_COLUMNS
-    full_data = pd.read_csv(filename).drop_duplicates() \
-        .astype({'checkout_date': 'datetime64',
-                 'checkin_date': 'datetime64',
-                 'hotel_live_date': 'datetime64',
-                 'booking_datetime': 'datetime64'})
-    features = full_data[RELEVANT_COLUMNS]
-    features['labels'] = full_data["cancellation_datetime"].isna()
-
-    # preprocessing
-    # TODO - move this into a separate function once it becomes too messy
-
-    # feature addition
-    features['stay_length'] = get_days_between_dates(features.checkout_date, features.checkin_date)
-    features['time_registered_pre_book'] = get_days_between_dates(features.checkin_date, features.hotel_live_date)
-    features['booking_to_arrival_time'] = get_days_between_dates(features.checkin_date, features.booking_datetime)
-    features['checkin_week_of_year'] = get_week_of_year(features.checkin_date)
-    features['booking_week_of_year'] = get_week_of_year(features.booking_datetime)
-    features['booked_on_weekend'] = get_booked_on_weekend(features.booking_datetime)
-    features['is_weekend_holiday'] = get_weekend_holiday(features.checkin_date, features.checkout_date)
-    features['is_local_holiday'] = get_local_holiday(features.origin_country_code, features.hotel_country_code)
-
-    # TODO : check if customer is from holiday country
-    features = process_categorical_data(features, CATEGORICAL_COLUMNS)
-    features = add_cancellation_policy_features(features)
-
-    return features.drop(NONE_OUTPUT_COLUMNS + ['labels'], axis='columns'), features.labels
-
-
 def evaluate_and_export(estimator: BaseEstimator, X: np.ndarray, filename: str):
     """
     Export to specified file the prediction results of given estimator on given testset.
@@ -317,32 +227,41 @@ def evaluate_and_export(estimator: BaseEstimator, X: np.ndarray, filename: str):
     pd.DataFrame(estimator.predict(X), columns=["predicted_values"]).to_csv(filename, index=False)
 
 
-def novel_main():
+def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", debug=False) -> Pipeline:
     np.random.seed(0)
 
     # Load data
-    df, cancellation_labels = load_data("../datasets/agoda_cancellation_train.csv")
-    raw_df, _, prep_pipe = create_pipeline_from_data("../datasets/agoda_cancellation_train.csv")
-    pipe_res = prep_pipe.transform(raw_df)
+    raw_df, cancellation_labels, pipeline = create_pipeline_from_data(path)
 
-    train_X, train_y, test_X, test_y = split_train_test(df, cancellation_labels)
+    train_X, train_y, test_X, test_y = split_train_test(raw_df, cancellation_labels)
+    train_X = pipeline.transform(train_X)
+    processed_test_X = pipeline.transform(test_X)
 
     # Fit model over data
     estimator = AgodaCancellationEstimator().fit(train_X, train_y)
+    pipeline.steps.append(('estimator', estimator))
 
     # Store model predictions over test set
     id1, id2, id3 = 209855253, 205843964, 212107536
-    evaluate_and_export(estimator, test_X, f"{id1}_{id2}_{id3}.csv")
+    evaluate_and_export(pipeline, test_X, f"{id1}_{id2}_{id3}.csv")
 
     # plot results
-    estimator.plot_roc_curve(test_X, test_y)
-    print(f'Accuracy score: {estimator.score(test_X, test_y)}')
+    if debug:
+        estimator.plot_roc_curve(processed_test_X, test_y)
+        print(f'Accuracy score: {estimator.score(processed_test_X, test_y)}')
 
-    plt.xlim(0)
-    plt.ylim(0)
+        plt.xlim(0)
+        plt.ylim(0)
 
-    plt.show()
+        plt.show()
+
+    return pipeline
+
+
+def export_test_data(pipeline: Pipeline, path='') -> NoReturn:
+    pass
 
 
 if __name__ == '__main__':
-    novel_main()
+    pipeline = create_estimator_from_data()
+    export_test_data(pipeline)
