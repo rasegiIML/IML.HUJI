@@ -232,8 +232,8 @@ def evaluate_and_export(estimator: BaseEstimator, X: pd.DataFrame, filename: str
     pd.DataFrame(estimator.predict(X), columns=["predicted_values"]).to_csv(filename, index=False)
 
 
-def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", threshold: float = None,
-                               optimize_threshold=True, debug=False) -> Pipeline:
+def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", threshold: float = 0.47,
+                               optimize_threshold=False, debug=False) -> Pipeline:
     np.random.seed(0)
 
     # Load data
