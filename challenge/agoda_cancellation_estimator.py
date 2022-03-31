@@ -74,7 +74,7 @@ class AgodaCancellationEstimator(BaseEstimator):
             Predicted responses of given samples
         """
         probs = self.__fit_model.predict_proba(X)[:, 1]
-        return probs < self.thresh if self.thresh is not None else probs
+        return probs > self.thresh if self.thresh is not None else probs
 
     def _loss(self, X: np.ndarray, y: np.ndarray) -> float:
         """
