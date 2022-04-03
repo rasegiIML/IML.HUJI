@@ -14,8 +14,7 @@ from IMLearn.utils import split_train_test
 
 import numpy as np
 import pandas as pd
-
-# from challenge.agoda_cancellation_estimator_gideoni import AgodaCancellationEstimator
+pd.options.mode.chained_assignment = None  # default='warn'
 
 __DEBUG = False
 
@@ -121,18 +120,32 @@ def add_cancellation_policy_features(features: pd.DataFrame) -> pd.DataFrame:
     cancellation_policy = features.cancellation_policy_code
     features['n_policies'] = cancellation_policy.apply(lambda policy: len(policy.split('_')))
     days_until_policy = cancellation_policy.apply(get_days_until_policy)
-    x = features.apply(get_money_lost_per_policy, axis='columns')
-    features['max_policy_cost'], features['min_policy_cost'], features['part_min_policy_cost'] = list(
-        map(list, zip(*x)))
 
     features['min_policy_days'] = days_until_policy.apply(min)
     features['max_policy_days'] = days_until_policy.apply(max)
 
-    features['min_policy_cost'] = features['min_policy_cost'].apply(min)
-    features['part_min_policy_cost'] = features['part_min_policy_cost'].apply(min)
-    features['max_policy_cost'] = features['max_policy_cost'].apply(max)
+    # x = features.apply(get_money_lost_per_policy, axis='columns')
+    # features['max_policy_cost'], features['min_policy_cost'], features['part_min_policy_cost'] = list(
+    #     map(list, zip(*x)))
+
+    # features['min_policy_cost'] = features['min_policy_cost'].apply(min)
+    # features['part_min_policy_cost'] = features['part_min_policy_cost'].apply(min)
+    # features['max_policy_cost'] = features['max_policy_cost'].apply(max)
 
     return features
+
+
+def add_time_based_cols(df: pd.DataFrame) -> pd.DataFrame:
+    df['stay_length'] = get_days_between_dates(df.checkout_date, df.checkin_date)
+    df['time_registered_pre_book'] = get_days_between_dates(df.checkin_date, df.hotel_live_date)
+    df['booking_to_arrival_time'] = get_days_between_dates(df.checkin_date, df.booking_datetime)
+    df['checkin_week_of_year'] = get_week_of_year(df.checkin_date)
+    df['booking_week_of_year'] = get_week_of_year(df.booking_datetime)
+    df['booked_on_weekend'] = get_booked_on_weekend(df.booking_datetime)
+    df['is_weekend_holiday'] = get_weekend_holiday(df.checkin_date, df.checkout_date)
+    df['is_local_holiday'] = get_local_holiday(df.origin_country_code, df.hotel_country_code)
+
+    return df
 
 
 def create_pipeline_from_data(filename: str):
@@ -175,37 +188,18 @@ def create_pipeline_from_data(filename: str):
                         'original_selling_amount'] + NONE_OUTPUT_COLUMNS + CATEGORICAL_COLUMNS
     features = read_data_file(filename)
 
-    pipeline_steps = [('columns selector', FunctionTransformer(lambda df: df[RELEVANT_COLUMNS]))]
-
     features['labels'] = features["cancellation_datetime"].isna()
 
-    # preprocessing
-    # TODO - move this into a separate function once it becomes too messy
-
-    # feature addition
-
-    def add_time_based_cols(df: pd.DataFrame) -> pd.DataFrame:
-        df['stay_length'] = get_days_between_dates(df.checkout_date, df.checkin_date)
-        df['time_registered_pre_book'] = get_days_between_dates(df.checkin_date, df.hotel_live_date)
-        df['booking_to_arrival_time'] = get_days_between_dates(df.checkin_date, df.booking_datetime)
-        df['checkin_week_of_year'] = get_week_of_year(df.checkin_date)
-        df['booking_week_of_year'] = get_week_of_year(df.booking_datetime)
-        df['booked_on_weekend'] = get_booked_on_weekend(df.booking_datetime)
-        df['is_weekend_holiday'] = get_weekend_holiday(df.checkin_date, df.checkout_date)
-        df['is_local_holiday'] = get_local_holiday(df.origin_country_code, df.hotel_country_code)
-
-        return df
-
-    pipeline_steps.append(('add time based columns', FunctionTransformer(add_time_based_cols)))
+    pipeline_steps = [('columns selector', FunctionTransformer(lambda df: df[RELEVANT_COLUMNS])),
+                      ('add time based columns', FunctionTransformer(add_time_based_cols)),
+                      ('add cancellation policy features', FunctionTransformer(add_cancellation_policy_features)),
+                      ('drop irrelevant columns',
+                       FunctionTransformer(lambda df: df.drop(NONE_OUTPUT_COLUMNS, axis='columns')))
+                      ]
 
     # TODO : check if customer is from holiday country
     pipeline = Pipeline(pipeline_steps)
     pipeline = add_categorical_prep_to_pipe(features, pipeline, CATEGORICAL_COLUMNS)
-
-    pipeline.steps.append(('add cancellation policy features', FunctionTransformer(add_cancellation_policy_features)))
-
-    pipeline.steps.append(('drop irrelevant columns',
-                           FunctionTransformer(lambda df: df.drop(NONE_OUTPUT_COLUMNS, axis='columns'))))
 
     return features.drop('labels', axis='columns'), features.labels, pipeline
 
@@ -229,7 +223,8 @@ def evaluate_and_export(estimator: BaseEstimator, X: pd.DataFrame, filename: str
         path to store file at
 
     """
-    pd.DataFrame(estimator.predict(X), columns=["predicted_values"]).to_csv(filename, index=False)
+    preds = estimator.predict(X)
+    pd.DataFrame(preds, columns=["predicted_values"]).to_csv(filename, index=False)
 
 
 def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", threshold: float = 0.47,
@@ -239,9 +234,11 @@ def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", 
     # Load data
     raw_df, cancellation_labels, pipeline = create_pipeline_from_data(path)
 
-    train_X, train_y, test_X, test_y = split_train_test(raw_df, cancellation_labels)
+    # train_X, train_y, test_X, test_y = split_train_test(raw_df, cancellation_labels)
+    train_X = raw_df
+    train_y = cancellation_labels
     train_X = pipeline.transform(train_X)
-    processed_test_X = pipeline.transform(test_X)
+    # processed_test_X = pipeline.transform(test_X)
 
     # Fit model over data
     estimator = AgodaCancellationEstimator(threshold).fit(train_X, train_y)
@@ -255,15 +252,15 @@ def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", 
         estimator.thresh = param_optim.best_params_['threshold']
 
     # plot results
-    if debug:
-        estimator.plot_roc_curve(processed_test_X, test_y)
-
-        plt.xlim(0)
-        plt.ylim(0)
-
-        plt.show()
-
-    print(f'Accuracy score on test data: {estimator.score(processed_test_X, test_y)}')
+    # if debug:
+    #     estimator.plot_roc_curve(processed_test_X, test_y)
+    #
+    #     plt.xlim(0)
+    #     plt.ylim(0)
+    #
+    #     plt.show()
+    #
+    # print(f'Accuracy score on test data: {estimator.score(processed_test_X, test_y)}')
 
     return pipeline
 

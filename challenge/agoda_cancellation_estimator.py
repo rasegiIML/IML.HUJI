@@ -1,15 +1,13 @@
 from __future__ import annotations
+
 from typing import NoReturn
 
+import numpy as np
 import pandas as pd
-from sklearn.ensemble import GradientBoostingClassifier, RandomForestClassifier
-from sklearn.linear_model import LogisticRegression
-from sklearn.neighbors import KNeighborsClassifier
+from sklearn.ensemble import RandomForestClassifier
 from sklearn.metrics import RocCurveDisplay, accuracy_score
-from sklearn.tree import DecisionTreeClassifier
 
 from IMLearn.base import BaseEstimator
-import numpy as np
 
 
 class AgodaCancellationEstimator(BaseEstimator):
@@ -74,7 +72,7 @@ class AgodaCancellationEstimator(BaseEstimator):
             Predicted responses of given samples
         """
         probs = self.__fit_model.predict_proba(X)[:, 1]
-        return probs > self.thresh if self.thresh is not None else probs
+        return np.logical_not(probs > self.thresh if self.thresh is not None else probs).astype('int')
 
     def _loss(self, X: np.ndarray, y: np.ndarray) -> float:
         """
