@@ -14,6 +14,7 @@ from IMLearn.utils import split_train_test
 
 import numpy as np
 import pandas as pd
+
 pd.options.mode.chained_assignment = None  # default='warn'
 
 __DEBUG = False
@@ -116,7 +117,6 @@ def get_money_lost_per_policy(features: pd.Series) -> list:
 
 
 def add_cancellation_policy_features(features: pd.DataFrame) -> pd.DataFrame:
-    # TODO - clean this up and make it work
     cancellation_policy = features.cancellation_policy_code
     features['n_policies'] = cancellation_policy.apply(lambda policy: len(policy.split('_')))
     days_until_policy = cancellation_policy.apply(get_days_until_policy)
@@ -124,13 +124,13 @@ def add_cancellation_policy_features(features: pd.DataFrame) -> pd.DataFrame:
     features['min_policy_days'] = days_until_policy.apply(min)
     features['max_policy_days'] = days_until_policy.apply(max)
 
-    # x = features.apply(get_money_lost_per_policy, axis='columns')
-    # features['max_policy_cost'], features['min_policy_cost'], features['part_min_policy_cost'] = list(
-    #     map(list, zip(*x)))
+    x = features.apply(get_money_lost_per_policy, axis='columns')
+    features['max_policy_cost'], features['min_policy_cost'], features['part_min_policy_cost'] = \
+        list(map(list, zip(*x)))
 
-    # features['min_policy_cost'] = features['min_policy_cost'].apply(min)
-    # features['part_min_policy_cost'] = features['part_min_policy_cost'].apply(min)
-    # features['max_policy_cost'] = features['max_policy_cost'].apply(max)
+    features['min_policy_cost'] = features['min_policy_cost'].apply(min)
+    features['part_min_policy_cost'] = features['part_min_policy_cost'].apply(min)
+    features['max_policy_cost'] = features['max_policy_cost'].apply(max)
 
     return features
 
@@ -149,21 +149,6 @@ def add_time_based_cols(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def create_pipeline_from_data(filename: str):
-    """
-    Load Agoda booking cancellation dataset
-    Parameters
-    ----------
-    filename: str
-        Path to house prices dataset
-
-    Returns
-    -------
-    Design matrix and response vector in either of the following formats:
-    1) Single dataframe with last column representing the response
-    2) Tuple of pandas.DataFrame and Series
-    3) Tuple of ndarray of shape (n_samples, n_features) and ndarray of shape (n_samples,)
-    """
-
     NONE_OUTPUT_COLUMNS = ['checkin_date',
                            'checkout_date',
                            'booking_datetime',
@@ -192,56 +177,36 @@ def create_pipeline_from_data(filename: str):
 
     pipeline_steps = [('columns selector', FunctionTransformer(lambda df: df[RELEVANT_COLUMNS])),
                       ('add time based columns', FunctionTransformer(add_time_based_cols)),
-                      ('add cancellation policy features', FunctionTransformer(add_cancellation_policy_features)),
-                      ('drop irrelevant columns',
-                       FunctionTransformer(lambda df: df.drop(NONE_OUTPUT_COLUMNS, axis='columns')))
+                      ('add cancellation policy features', FunctionTransformer(add_cancellation_policy_features))
                       ]
 
-    # TODO : check if customer is from holiday country
     pipeline = Pipeline(pipeline_steps)
     pipeline = add_categorical_prep_to_pipe(features, pipeline, CATEGORICAL_COLUMNS)
+
+    pipeline.steps.append(('drop irrelevant columns',
+                           FunctionTransformer(lambda df: df.drop(NONE_OUTPUT_COLUMNS, axis='columns'))))
 
     return features.drop('labels', axis='columns'), features.labels, pipeline
 
 
 def evaluate_and_export(estimator: BaseEstimator, X: pd.DataFrame, filename: str):
-    """
-    Export to specified file the prediction results of given estimator on given testset.
-
-    File saved is in csv format with a single column named 'predicted_values' and n_samples rows containing
-    predicted values.
-
-    Parameters
-    ----------
-    estimator: BaseEstimator or any object implementing predict() method as in BaseEstimator (for example sklearn)
-        Fitted estimator to use for prediction
-
-    X: pd.DataFrame of shape (n_samples, n_features)
-        Test design matrix to predict its responses
-
-    filename:
-        path to store file at
-
-    """
-    preds = estimator.predict(X)
+    preds = (~estimator.predict(X)).astype(int)
     pd.DataFrame(preds, columns=["predicted_values"]).to_csv(filename, index=False)
 
 
 def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", threshold: float = 0.47,
-                               optimize_threshold=False, debug=False) -> Pipeline:
+                               optimize_threshold=False, frac: float = 0.75, debug=False) -> Pipeline:
     np.random.seed(0)
 
     # Load data
     raw_df, cancellation_labels, pipeline = create_pipeline_from_data(path)
 
-    # train_X, train_y, test_X, test_y = split_train_test(raw_df, cancellation_labels)
-    train_X = raw_df
-    train_y = cancellation_labels
-    train_X = pipeline.transform(train_X)
-    # processed_test_X = pipeline.transform(test_X)
+    train_X, train_y, test_X, test_y = split_train_test(raw_df, cancellation_labels, train_proportion=frac)
+    processed_test_X = pipeline.transform(test_X)
+    processed_train_X = pipeline.transform(train_X)
 
     # Fit model over data
-    estimator = AgodaCancellationEstimator(threshold).fit(train_X, train_y)
+    estimator = AgodaCancellationEstimator(threshold).fit(processed_train_X, train_y)
     pipeline.steps.append(('estimator', estimator))
 
     if optimize_threshold:
@@ -252,15 +217,15 @@ def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", 
         estimator.thresh = param_optim.best_params_['threshold']
 
     # plot results
-    # if debug:
-    #     estimator.plot_roc_curve(processed_test_X, test_y)
-    #
-    #     plt.xlim(0)
-    #     plt.ylim(0)
-    #
-    #     plt.show()
-    #
-    # print(f'Accuracy score on test data: {estimator.score(processed_test_X, test_y)}')
+    if debug:
+        estimator.plot_roc_curve(processed_test_X, test_y)
+
+        plt.xlim(0)
+        plt.ylim(0)
+
+        plt.show()
+
+    print(f'Accuracy score on test data: {estimator.score(processed_test_X, test_y)}')
 
     return pipeline
 
@@ -275,4 +240,4 @@ def export_test_data(pipeline: Pipeline, path="../datasets/test_set_week_1.csv")
 
 if __name__ == '__main__':
     pipeline = create_estimator_from_data()
-    export_test_data(pipeline)
+    # export_test_data(pipeline)
