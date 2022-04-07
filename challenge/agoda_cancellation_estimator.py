@@ -11,9 +11,9 @@ from IMLearn.base import BaseEstimator
 
 
 class AgodaCancellationEstimator(BaseEstimator):
-    def __init__(self, threshold: float = None) -> AgodaCancellationEstimator:
+    def __init__(self, threshold: float = 0.5) -> AgodaCancellationEstimator:
         super().__init__()
-        self.__fit_model: RandomForestClassifier = None
+        self._fit_model: RandomForestClassifier = None
         self.thresh = threshold
 
     def get_params(self, deep=False):
@@ -25,17 +25,17 @@ class AgodaCancellationEstimator(BaseEstimator):
         return self
 
     def _fit(self, X: np.ndarray, y: np.ndarray) -> NoReturn:
-        self.__fit_model = RandomForestClassifier(random_state=0).fit(X, y)
+        self._fit_model = RandomForestClassifier(random_state=0).fit(X, y)
 
     def _predict(self, X: pd.DataFrame) -> np.ndarray:
-        probs = self.__fit_model.predict_proba(X)[:, 1]
-        return probs > self.thresh if self.thresh is not None else probs
+        probs = self._fit_model.predict_proba(X)[:, 1]
+        return probs > self.thresh
 
     def _loss(self, X: np.ndarray, y: np.ndarray) -> float:
         pass
 
     def plot_roc_curve(self, X: np.ndarray, y: np.ndarray):
-        RocCurveDisplay.from_estimator(self.__fit_model, X, y)
+        RocCurveDisplay.from_estimator(self._fit_model, X, y)
 
     def score(self, X: pd.DataFrame, y: pd.Series):
         return accuracy_score(y, self._predict(X))

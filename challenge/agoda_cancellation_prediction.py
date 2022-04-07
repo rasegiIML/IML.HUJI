@@ -1,4 +1,5 @@
 import re
+from collections import namedtuple
 from copy import copy
 from datetime import datetime
 from typing import NoReturn
@@ -18,6 +19,8 @@ import pandas as pd
 pd.options.mode.chained_assignment = None  # default='warn'
 
 __DEBUG = False
+
+Period = namedtuple("Period", ("days_until", 'length'))
 
 
 def read_data_file(path: str) -> pd.DataFrame:
@@ -56,7 +59,8 @@ def add_categorical_prep_to_pipe(train_features: pd.DataFrame, pipeline: Pipelin
     # category probability preprocessing - make each category have its success percentage
     if calc_probs:
         for cat_var in cat_vars:
-            map_cat_to_prob: dict = train_features.groupby(cat_var, dropna=False).labels.mean().to_dict()
+            map_cat_to_prob: dict = train_features.groupby(cat_var, dropna=False) \
+                .cancelled_in_period.mean().to_dict()
 
             pipeline.steps.append((f'map {cat_var} to prob',
                                    FunctionTransformer(create_col_prob_mapper(cat_var, map_cat_to_prob))))
@@ -148,7 +152,7 @@ def add_time_based_cols(df: pd.DataFrame) -> pd.DataFrame:
     return df
 
 
-def create_pipeline_from_data(filename: str):
+def create_pipeline_from_data(filename: str, period: Period):
     NONE_OUTPUT_COLUMNS = ['checkin_date',
                            'checkout_date',
                            'booking_datetime',
@@ -173,7 +177,11 @@ def create_pipeline_from_data(filename: str):
                         'original_selling_amount'] + NONE_OUTPUT_COLUMNS + CATEGORICAL_COLUMNS
     features = read_data_file(filename)
 
-    features['labels'] = features["cancellation_datetime"].isna()
+    features['cancelled_in_period'] = ((features.cancellation_datetime >=
+                                        features.checkin_date + pd.DateOffset(day=period.days_until)) & \
+                                       (features.cancellation_datetime <=
+                                        features.checkin_date + pd.DateOffset(day=period.days_until + period.length))) \
+        .astype(int)
 
     pipeline_steps = [('columns selector', FunctionTransformer(lambda df: df[RELEVANT_COLUMNS])),
                       ('add time based columns', FunctionTransformer(add_time_based_cols)),
@@ -186,7 +194,7 @@ def create_pipeline_from_data(filename: str):
     pipeline.steps.append(('drop irrelevant columns',
                            FunctionTransformer(lambda df: df.drop(NONE_OUTPUT_COLUMNS, axis='columns'))))
 
-    return features.drop('labels', axis='columns'), features.labels, pipeline
+    return features.drop('cancelled_in_period', axis='columns'), features.cancelled_in_period, pipeline
 
 
 def evaluate_and_export(estimator: BaseEstimator, X: pd.DataFrame, filename: str):
@@ -194,12 +202,12 @@ def evaluate_and_export(estimator: BaseEstimator, X: pd.DataFrame, filename: str
     pd.DataFrame(preds, columns=["predicted_values"]).to_csv(filename, index=False)
 
 
-def create_estimator_from_data(path="../datasets/agoda_cancellation_train.csv", threshold: float = 0.47,
-                               optimize_threshold=False, frac: float = 0.75, debug=False) -> Pipeline:
+def create_estimator_for_period_from_data(period: Period, path="../datasets/agoda_cancellation_train.csv", threshold: float = 0.5,
+                                          optimize_threshold=False, frac: float = 0.75, debug=False) -> Pipeline:
     np.random.seed(0)
 
     # Load data
-    raw_df, cancellation_labels, pipeline = create_pipeline_from_data(path)
+    raw_df, cancellation_labels, pipeline = create_pipeline_from_data(path, period)
 
     train_X, train_y, test_X, test_y = split_train_test(raw_df, cancellation_labels, train_proportion=frac)
     processed_test_X = pipeline.transform(test_X)
@@ -239,5 +247,6 @@ def export_test_data(pipeline: Pipeline, path="../datasets/test_set_week_1.csv")
 
 
 if __name__ == '__main__':
-    pipeline = create_estimator_from_data()
+    temp_period = Period(5, 7)
+    pipeline = create_estimator_for_period_from_data(temp_period)
     # export_test_data(pipeline)
