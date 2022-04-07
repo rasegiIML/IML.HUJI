@@ -77,7 +77,7 @@ class GeneralCancellationEstimatorBuilder:
             # raise NotImplementedError
             preproc_pipe = deepcopy(base_pipe)
             period = Period(days_until_checkin, self.period_length)
-            train_data['cancelled_in_period'] = self.__get_response_for_period(train_data, period)
+            train_data['cancelled_in_period'] = self.__get_response_for_period(base_pipe.transform(train_data), period)
 
             preproc_pipe = self.__add_period_dependent_preproc_to_pipe(preproc_pipe, train_data)
 
@@ -94,3 +94,41 @@ class GeneralCancellationEstimatorBuilder:
     @classmethod
     def __create_common_preproc_pipeline(cls) -> Pipeline:
         return CommonPreProcPipeCreator.build_pipe(cls.__RELEVANT_COLUMNS)
+
+    @staticmethod
+    def __get_response_for_period(train_data: pd.DataFrame, period: Period) -> pd.Series:
+        return (train_data.cancellation_datetime >=
+                train_data.checkin_date + pd.DateOffset(day=period.days_until)) & \
+               (train_data.cancellation_datetime <=
+                train_data.checkin_date + pd.DateOffset(day=period.days_until + period.length))
+
+    @classmethod
+    def __add_period_dependent_preproc_to_pipe(cls, preproc_pipe: Pipeline, train_data: pd.DataFrame) -> Pipeline:
+        preproc_pipe = cls.__add_categorical_prep_to_pipe(train_data, preproc_pipe, cls.__CATEGORICAL_COLUMNS)
+
+        preproc_pipe.steps.append(('drop irrelevant columns',
+                                   FunctionTransformer(lambda df: df.drop(cls.__NONE_OUTPUT_COLUMNS, axis='columns'))))
+
+        return preproc_pipe
+
+    @staticmethod
+    def __add_categorical_prep_to_pipe(train_features: pd.DataFrame, pipeline: Pipeline, cat_vars: list,
+                                       one_hot=False, calc_probs=True) -> Pipeline:
+        assert one_hot ^ calc_probs, \
+            'Error: can only do either one-hot encoding or probability calculations, not neither/both!'
+        # one-hot encoding
+        if one_hot:
+            # TODO - use sklearn OneHotEncoder
+            pipeline.steps.append(('one-hot encoding',
+                                   FunctionTransformer(lambda df: pd.get_dummies(df, columns=cat_vars))))
+
+        # category probability preprocessing - make each category have its success percentage
+        if calc_probs:
+            for cat_var in cat_vars:
+                map_cat_to_prob: dict = train_features.groupby(cat_var, dropna=False) \
+                    .cancelled_in_period.mean().to_dict()
+
+                pipeline.steps.append((f'map {cat_var} to prob',
+                                       FunctionTransformer(create_col_prob_mapper(cat_var, map_cat_to_prob))))
+
+        return pipeline
