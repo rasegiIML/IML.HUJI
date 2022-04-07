@@ -1,6 +1,6 @@
 import dataclasses
 from collections import namedtuple
-from copy import deepcopy
+from copy import deepcopy, copy
 from typing import NoReturn
 
 import numpy as np
@@ -10,25 +10,41 @@ from sklearn.preprocessing import FunctionTransformer
 
 from IMLearn import BaseEstimator
 from challenge.common_preproc_pipe_creator import CommonPreProcPipeCreator
+from challenge.period_cancellation_estimator import PeriodCancellationEstimator
 
 Period = namedtuple("Period", ("days_until", 'length'))
 
 
-class GeneralCancellationEstimator(BaseEstimator):
+class ModelForPeriodExistsError(BaseException):
+    pass
+
+
+class GeneralCancellationEstimator:
     def __init__(self):
         super().__init__()
         self.__models = {}
 
-    def add_model(self, X: np.ndarray, y: np.ndarray, preproc_pipe: Pipeline, period: Period):
-        raise NotImplementedError
+    def __get_period(self, data_row: pd.Series):
+        return (data_row.checkin_date - data_row.booking_datetime).days
 
-    def _fit(self, X: np.ndarray, y: np.ndarray) -> NoReturn:
-        raise NotImplementedError
+    def add_model(self, X: np.ndarray, y: np.ndarray, pipe: Pipeline, period: Period, threshold=0.5):
+        if period.days_until in self.__models:
+            raise ModelForPeriodExistsError(f'There already exists a model with {period.days_until} '
+                                            f'days until checkin.')
 
-    def _predict(self, X: np.ndarray) -> np.ndarray:
-        raise NotImplementedError
+        train_X = pipe.transform(X)
 
-    def _loss(self, X: np.ndarray, y: np.ndarray) -> float:
+        model_estimator = PeriodCancellationEstimator(threshold).fit(train_X, y)
+        pipe.steps.append(('estimator', model_estimator))
+
+        self.__models[period.days_until] = pipe
+
+    def predict(self, X: pd.DataFrame) -> pd.Series:
+        periods = X.apply(self.__get_period, axis='columns')
+
+        return X.groupby(periods, as_index=False).apply(lambda data: self.__models[data.name].predict(data))
+
+    def loss(self, X: np.ndarray, y: np.ndarray) -> float:
         raise NotImplementedError
 
 
@@ -66,18 +82,15 @@ class GeneralCancellationEstimatorBuilder:
                               'hotel_live_date': 'datetime64',
                               'booking_datetime': 'datetime64'}
 
-    def build_pipeline(self, train_path: str == __DEF_PATH) -> GeneralCancellationEstimator:
+    def build_pipeline(self, train_data: pd.DataFrame) -> GeneralCancellationEstimator:
         base_pipe = self.__create_common_preproc_pipeline()
-
-        train_data = self.__read_data_file(train_path)
 
         general_estimator = GeneralCancellationEstimator()
 
         for days_until_checkin in range(self.max_days_until_checkin, self.max_days_until_checkin + 1):
-            # raise NotImplementedError
             preproc_pipe = deepcopy(base_pipe)
             period = Period(days_until_checkin, self.period_length)
-            train_data['cancelled_in_period'] = self.__get_response_for_period(base_pipe.transform(train_data), period)
+            train_data['cancelled_in_period'] = self.__get_response_for_period(train_data, period)
 
             preproc_pipe = self.__add_period_dependent_preproc_to_pipe(preproc_pipe, train_data)
 
@@ -85,11 +98,6 @@ class GeneralCancellationEstimatorBuilder:
                                         train_data.cancelled_in_period, preproc_pipe, period)
 
         return general_estimator
-
-    @classmethod
-    def __read_data_file(cls, path: str) -> pd.DataFrame:
-        return pd.read_csv(path).drop_duplicates() \
-            .astype(cls.__COL_TYPE_CONVERSIONS)
 
     @classmethod
     def __create_common_preproc_pipeline(cls) -> Pipeline:
@@ -111,8 +119,8 @@ class GeneralCancellationEstimatorBuilder:
 
         return preproc_pipe
 
-    @staticmethod
-    def __add_categorical_prep_to_pipe(train_features: pd.DataFrame, pipeline: Pipeline, cat_vars: list,
+    @classmethod
+    def __add_categorical_prep_to_pipe(cls, train_features: pd.DataFrame, pipeline: Pipeline, cat_vars: list,
                                        one_hot=False, calc_probs=True) -> Pipeline:
         assert one_hot ^ calc_probs, \
             'Error: can only do either one-hot encoding or probability calculations, not neither/both!'
@@ -129,6 +137,17 @@ class GeneralCancellationEstimatorBuilder:
                     .cancelled_in_period.mean().to_dict()
 
                 pipeline.steps.append((f'map {cat_var} to prob',
-                                       FunctionTransformer(create_col_prob_mapper(cat_var, map_cat_to_prob))))
+                                       FunctionTransformer(cls.__create_col_prob_mapper(cat_var, map_cat_to_prob))))
 
         return pipeline
+
+    @staticmethod
+    def __create_col_prob_mapper(col: str, mapper: dict):
+        mapper = copy(mapper)
+
+        def map_col_to_prob(df):
+            df[col] = df[col].apply(mapper.get)
+
+            return df
+
+        return map_col_to_prob
