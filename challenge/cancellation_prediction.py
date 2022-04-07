@@ -10,7 +10,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
 
 from IMLearn import BaseEstimator
-from challenge.agoda_cancellation_estimator import AgodaCancellationEstimator
+from challenge.period_cancellation_estimator import PeriodCancellationEstimator
 from IMLearn.utils import split_train_test
 
 import numpy as np
@@ -214,11 +214,11 @@ def create_estimator_for_period_from_data(period: Period, path="../datasets/agod
     processed_train_X = pipeline.transform(train_X)
 
     # Fit model over data
-    estimator = AgodaCancellationEstimator(threshold).fit(processed_train_X, train_y)
+    estimator = PeriodCancellationEstimator(threshold).fit(processed_train_X, train_y)
     pipeline.steps.append(('estimator', estimator))
 
     if optimize_threshold:
-        unopt_est = AgodaCancellationEstimator()
+        unopt_est = PeriodCancellationEstimator()
         param_optim = GridSearchCV(unopt_est, {'threshold': np.linspace(0, 1)})
         param_optim.fit(train_X, train_y)
         print(f'Optimal params: {param_optim.best_params_}')

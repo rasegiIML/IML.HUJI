@@ -10,8 +10,8 @@ from sklearn.metrics import RocCurveDisplay, accuracy_score
 from IMLearn.base import BaseEstimator
 
 
-class AgodaCancellationEstimator(BaseEstimator):
-    def __init__(self, threshold: float = 0.5) -> AgodaCancellationEstimator:
+class PeriodCancellationEstimator(BaseEstimator):
+    def __init__(self, threshold: float = 0.5) -> PeriodCancellationEstimator:
         super().__init__()
         self._fit_model: RandomForestClassifier = None
         self.thresh = threshold
@@ -19,7 +19,7 @@ class AgodaCancellationEstimator(BaseEstimator):
     def get_params(self, deep=False):
         return {'threshold': self.thresh}
 
-    def set_params(self, threshold) -> AgodaCancellationEstimator:
+    def set_params(self, threshold) -> PeriodCancellationEstimator:
         self.thresh = threshold
 
         return self
