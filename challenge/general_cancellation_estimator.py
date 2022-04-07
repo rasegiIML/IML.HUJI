@@ -143,11 +143,11 @@ class GeneralCancellationEstimatorBuilder:
         return pipeline
 
     @staticmethod
-    def __create_col_prob_mapper(col: str, mapper: dict):
+    def __create_col_prob_mapper(col: str, mapper: dict, MISSING_FILL=0.5):
         mapper = copy(mapper)
 
         def map_col_to_prob(df):
-            df[col] = df[col].apply(mapper.get)
+            df[col] = df[col].apply(lambda x: mapper.get(x, MISSING_FILL))
 
             return df
 
