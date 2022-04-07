@@ -51,8 +51,8 @@ class GeneralCancellationEstimator:
 @dataclasses.dataclass
 class GeneralCancellationEstimatorBuilder:
     period_length: int
-    min_days_until_checkin: int
-    max_days_until_checkin: int
+    min_days_until_cancellation_period: int
+    max_days_until_cancellation_period: int
 
     __NONE_OUTPUT_COLUMNS = ['checkin_date',
                              'checkout_date',
@@ -87,9 +87,10 @@ class GeneralCancellationEstimatorBuilder:
 
         general_estimator = GeneralCancellationEstimator()
 
-        for days_until_checkin in range(self.max_days_until_checkin, self.max_days_until_checkin + 1):
+        for days_until_cancellation_period in range(self.min_days_until_cancellation_period,
+                                                    self.max_days_until_cancellation_period + 1):
             preproc_pipe = deepcopy(base_pipe)
-            period = Period(days_until_checkin, self.period_length)
+            period = Period(days_until_cancellation_period, self.period_length)
             train_data['cancelled_in_period'] = self.__get_response_for_period(train_data, period)
 
             preproc_pipe = self.__add_period_dependent_preproc_to_pipe(preproc_pipe, train_data)
