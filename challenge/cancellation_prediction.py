@@ -10,6 +10,7 @@ from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
 
 from IMLearn import BaseEstimator
+from challenge.general_cancellation_estimator import GeneralCancellationEstimatorBuilder
 from challenge.period_cancellation_estimator import PeriodCancellationEstimator
 from IMLearn.utils import split_train_test
 
@@ -202,7 +203,8 @@ def evaluate_and_export(estimator: BaseEstimator, X: pd.DataFrame, filename: str
     pd.DataFrame(preds, columns=["predicted_values"]).to_csv(filename, index=False)
 
 
-def create_estimator_for_period_from_data(period: Period, path="../datasets/agoda_cancellation_train.csv", threshold: float = 0.5,
+def create_estimator_for_period_from_data(period: Period, path="../datasets/agoda_cancellation_train.csv",
+                                          threshold: float = 0.5,
                                           optimize_threshold=False, frac: float = 0.75, debug=False) -> Pipeline:
     np.random.seed(0)
 
@@ -248,5 +250,7 @@ def export_test_data(pipeline: Pipeline, path="../datasets/test_set_week_1.csv")
 
 if __name__ == '__main__':
     temp_period = Period(5, 7)
+    pipeline = GeneralCancellationEstimatorBuilder(PERIOD_LENGTH, min_days_until_checkin, max_days_until_checkin) \
+        .build_pipeline()
     pipeline = create_estimator_for_period_from_data(temp_period)
     # export_test_data(pipeline)
