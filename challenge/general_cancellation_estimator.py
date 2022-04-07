@@ -5,6 +5,7 @@ from typing import NoReturn
 
 import numpy as np
 import pandas as pd
+from numpy import datetime64
 from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import FunctionTransformer
 
@@ -15,22 +16,36 @@ from challenge.period_cancellation_estimator import PeriodCancellationEstimator
 Period = namedtuple("Period", ("days_until", 'length'))
 
 
+def get_response_for_period(train_data: pd.DataFrame, period: Period) -> pd.Series:
+    return (train_data.cancellation_datetime >=
+            train_data.booking_datetime + pd.DateOffset(day=period.days_until)) & \
+           (train_data.cancellation_datetime <=
+            train_data.booking_datetime + pd.DateOffset(day=period.days_until + period.length))
+
+
 class ModelForPeriodExistsError(BaseException):
     pass
 
 
 class GeneralCancellationEstimator:
-    def __init__(self):
+    def __init__(self, period_length: int, cancellation_period_start=None):
         super().__init__()
         self.__models = {}
+        self.cancellation_period_start = cancellation_period_start
+        self.__def_days_until_cancellation = 0
+        self.__period_length = period_length
 
-    def __get_period(self, data_row: pd.Series):
-        return (data_row.checkin_date - data_row.booking_datetime).days
+    def __get_days_until_cancellation_period(self, data_row: pd.Series):
+        return self.cancellation_period_start - data_row.booking_datetime \
+            if self.cancellation_period_start is not None else self.__def_days_until_cancellation
 
     def add_model(self, X: np.ndarray, y: np.ndarray, pipe: Pipeline, period: Period, threshold=0.5):
         if period.days_until in self.__models:
             raise ModelForPeriodExistsError(f'There already exists a model with {period.days_until} '
-                                            f'days until checkin.')
+                                            f'days until the start of the relevant cancellation period.')
+
+        assert period.length == self.__period_length, \
+            f'Error: estimator only deals with periods of length {self.__period_length}.'
 
         train_X = pipe.transform(X)
 
@@ -40,9 +55,20 @@ class GeneralCancellationEstimator:
         self.__models[period.days_until] = pipe
 
     def predict(self, X: pd.DataFrame) -> pd.Series:
-        periods = X.apply(self.__get_period, axis='columns')
+        periods = X.apply(self.__get_days_until_cancellation_period, axis='columns')
 
         return X.groupby(periods, as_index=False).apply(lambda data: self.__models[data.name].predict(data))
+
+    def test_models(self, test_data: pd.DataFrame):
+        for days_until_canc_period_start in self.__models:
+            self.__def_days_until_cancellation = days_until_canc_period_start
+            test_data_resp = get_response_for_period(test_data,
+                                                     Period(days_until_canc_period_start, self.__period_length))
+
+            model_score = self.__models[days_until_canc_period_start].score(test_data, test_data_resp)
+
+            print(f'Score for model with {days_until_canc_period_start} days until start'
+                  f' of cancellation period: {model_score:.3f}')
 
     def loss(self, X: np.ndarray, y: np.ndarray) -> float:
         raise NotImplementedError
@@ -76,7 +102,6 @@ class GeneralCancellationEstimatorBuilder:
                           'no_of_extra_bed',
                           'no_of_room',
                           'original_selling_amount'] + __NONE_OUTPUT_COLUMNS + __CATEGORICAL_COLUMNS
-    __DEF_PATH = "../datasets/agoda_cancellation_train.csv"
     __COL_TYPE_CONVERSIONS = {'checkout_date': 'datetime64',
                               'checkin_date': 'datetime64',
                               'hotel_live_date': 'datetime64',
@@ -85,13 +110,14 @@ class GeneralCancellationEstimatorBuilder:
     def build_pipeline(self, train_data: pd.DataFrame) -> GeneralCancellationEstimator:
         base_pipe = self.__create_common_preproc_pipeline()
 
-        general_estimator = GeneralCancellationEstimator()
+        general_estimator = GeneralCancellationEstimator(self.period_length)
 
         for days_until_cancellation_period in range(self.min_days_until_cancellation_period,
                                                     self.max_days_until_cancellation_period + 1):
             preproc_pipe = deepcopy(base_pipe)
             period = Period(days_until_cancellation_period, self.period_length)
-            train_data['cancelled_in_period'] = self.__get_response_for_period(train_data, period)
+            train_data['cancelled_in_period'] = get_response_for_period(train_data.astype(self.__COL_TYPE_CONVERSIONS),
+                                                                        period)
 
             preproc_pipe = self.__add_period_dependent_preproc_to_pipe(preproc_pipe, train_data)
 
@@ -103,13 +129,6 @@ class GeneralCancellationEstimatorBuilder:
     @classmethod
     def __create_common_preproc_pipeline(cls) -> Pipeline:
         return CommonPreProcPipeCreator.build_pipe(cls.__RELEVANT_COLUMNS)
-
-    @staticmethod
-    def __get_response_for_period(train_data: pd.DataFrame, period: Period) -> pd.Series:
-        return (train_data.cancellation_datetime >=
-                train_data.checkin_date + pd.DateOffset(day=period.days_until)) & \
-               (train_data.cancellation_datetime <=
-                train_data.checkin_date + pd.DateOffset(day=period.days_until + period.length))
 
     @classmethod
     def __add_period_dependent_preproc_to_pipe(cls, preproc_pipe: Pipeline, train_data: pd.DataFrame) -> Pipeline:
