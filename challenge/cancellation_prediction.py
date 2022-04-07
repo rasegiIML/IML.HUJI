@@ -250,7 +250,5 @@ def export_test_data(pipeline: Pipeline, path="../datasets/test_set_week_1.csv")
 
 if __name__ == '__main__':
     temp_period = Period(5, 7)
-    pipeline = GeneralCancellationEstimatorBuilder(PERIOD_LENGTH, min_days_until_checkin, max_days_until_checkin) \
-        .build_pipeline()
     pipeline = create_estimator_for_period_from_data(temp_period)
     # export_test_data(pipeline)
