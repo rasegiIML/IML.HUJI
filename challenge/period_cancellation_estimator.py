@@ -28,7 +28,7 @@ class PeriodCancellationEstimator(BaseEstimator):
         self._fit_model = RandomForestClassifier(random_state=0).fit(X, y)
 
     def _predict(self, X: pd.DataFrame) -> np.ndarray:
-        probs = self._fit_model.predict_proba(X)[:, 1]
+        probs = 1 - self._fit_model.predict_proba(X)[:, 0]
         return probs > self.thresh
 
     def _loss(self, X: np.ndarray, y: np.ndarray) -> float:
