@@ -48,15 +48,15 @@ def export_test_data(pipeline: Pipeline, path="../datasets/test_set_week_1.csv")
 
 if __name__ == '__main__':
     PERIOD_LENGTH = 7
-    MIN_DAYS_UNTIL_CANCELLATION = 7
-    MAX_DAYS_UNTIL_CANCELLATION = 14
+    MIN_DAYS_UNTIL_CANCELLATION_PERIOD = 7
+    MAX_DAYS_UNTIL_CANCELLATION_PERIOD = 30
 
     data = read_data_file(__DEF_PATH)
 
     train, _, test, _ = split_train_test(data, data.cancellation_datetime)
 
-    general_estimator = GeneralCancellationEstimatorBuilder(PERIOD_LENGTH, MIN_DAYS_UNTIL_CANCELLATION,
-                                                            MAX_DAYS_UNTIL_CANCELLATION).build_pipeline(train)
+    general_estimator = GeneralCancellationEstimatorBuilder(PERIOD_LENGTH, MIN_DAYS_UNTIL_CANCELLATION_PERIOD,
+                                                            MAX_DAYS_UNTIL_CANCELLATION_PERIOD).build_pipeline(train)
 
     general_estimator.test_models(test)
 
