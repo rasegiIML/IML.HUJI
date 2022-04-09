@@ -30,17 +30,17 @@ class ModelForPeriodExistsError(BaseException):
 class GeneralCancellationEstimator:
     def __init__(self, period_length: int, cancellation_period_start=None):
         super().__init__()
-        self.__models = {}
+        self._models = {}
         self.cancellation_period_start = cancellation_period_start
         self.__def_days_until_cancellation = 0
         self.__period_length = period_length
 
-    def __get_days_until_cancellation_period(self, data_row: pd.Series):
-        return self.cancellation_period_start - data_row.booking_datetime \
+    def _get_days_until_cancellation_period(self, data_row: pd.Series):
+        return (self.cancellation_period_start - data_row.booking_datetime).days \
             if self.cancellation_period_start is not None else self.__def_days_until_cancellation
 
     def add_model(self, X: np.ndarray, y: np.ndarray, pipe: Pipeline, period: Period, threshold=0.5):
-        if period.days_until in self.__models:
+        if period.days_until in self._models:
             raise ModelForPeriodExistsError(f'There already exists a model with {period.days_until} '
                                             f'days until the start of the relevant cancellation period.')
 
@@ -52,20 +52,22 @@ class GeneralCancellationEstimator:
         model_estimator = PeriodCancellationEstimator(threshold).fit(train_X, y)
         pipe.steps.append(('estimator', model_estimator))
 
-        self.__models[period.days_until] = pipe
+        self._models[period.days_until] = pipe
 
     def predict(self, X: pd.DataFrame) -> pd.Series:
-        periods = X.apply(self.__get_days_until_cancellation_period, axis='columns')
+        periods = X.apply(self._get_days_until_cancellation_period, axis='columns')
 
-        return X.groupby(periods, as_index=False).apply(lambda data: self.__models[data.name].predict(data))
+        return X.groupby(periods, as_index=False) \
+            .apply(lambda data: pd.Series(self._models[data.name].predict(data), index=data.index)) \
+            .droplevel(0, axis='index').sort_index()
 
     def test_models(self, test_data: pd.DataFrame):
-        for days_until_canc_period_start in self.__models:
+        for days_until_canc_period_start in self._models:
             self.__def_days_until_cancellation = days_until_canc_period_start
             test_data_resp = get_response_for_period(test_data,
                                                      Period(days_until_canc_period_start, self.__period_length))
 
-            model_score = self.__models[days_until_canc_period_start].score(test_data, test_data_resp)
+            model_score = self._models[days_until_canc_period_start].score(test_data, test_data_resp)
 
             print(f'Score for model with {days_until_canc_period_start} days until start'
                   f' of cancellation period: {model_score:.3f}')
@@ -107,13 +109,16 @@ class GeneralCancellationEstimatorBuilder:
                               'hotel_live_date': 'datetime64',
                               'booking_datetime': 'datetime64'}
 
-    def build_pipeline(self, train_data: pd.DataFrame) -> GeneralCancellationEstimator:
+    def build_pipeline(self, train_data: pd.DataFrame,
+                       cancellation_period_start: np.datetime64) -> GeneralCancellationEstimator:
         base_pipe = self.__create_common_preproc_pipeline()
 
-        general_estimator = GeneralCancellationEstimator(self.period_length)
+        general_estimator = GeneralCancellationEstimator(self.period_length, cancellation_period_start)
 
         for days_until_cancellation_period in range(self.min_days_until_cancellation_period,
                                                     self.max_days_until_cancellation_period + 1):
+            print(f'Creating model for {days_until_cancellation_period} days until cancellation.')
+
             preproc_pipe = deepcopy(base_pipe)
             period = Period(days_until_cancellation_period, self.period_length)
             train_data['cancelled_in_period'] = get_response_for_period(train_data.astype(self.__COL_TYPE_CONVERSIONS),
