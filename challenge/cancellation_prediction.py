@@ -1,21 +1,13 @@
-import re
 from collections import namedtuple
-from copy import copy
-from datetime import datetime
 from typing import NoReturn
-
-from matplotlib import pyplot as plt
-from sklearn.model_selection import GridSearchCV
-from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import FunctionTransformer
-
-from IMLearn import BaseEstimator
-from challenge.general_cancellation_estimator import GeneralCancellationEstimatorBuilder
-from challenge.period_cancellation_estimator import PeriodCancellationEstimator
-from IMLearn.utils import split_train_test
 
 import numpy as np
 import pandas as pd
+from sklearn.pipeline import Pipeline
+
+from IMLearn import BaseEstimator
+from IMLearn.utils import split_train_test
+from challenge.general_cancellation_estimator import GeneralCancellationEstimatorBuilder
 
 pd.options.mode.chained_assignment = None  # default='warn'
 
@@ -34,7 +26,7 @@ def read_data_file(path: str) -> pd.DataFrame:
 
 
 def evaluate_and_export(estimator: BaseEstimator, X: pd.DataFrame, filename: str):
-    preds = (~estimator.predict(X)).astype(int)
+    preds = estimator.predict(X).astype(int)
     pd.DataFrame(preds, columns=["predicted_values"]).to_csv(filename, index=False)
 
 
@@ -48,16 +40,18 @@ def export_test_data(pipeline: Pipeline, path="../datasets/test_set_week_1.csv")
 
 if __name__ == '__main__':
     PERIOD_LENGTH = 7
-    MIN_DAYS_UNTIL_CANCELLATION_PERIOD = 7
-    MAX_DAYS_UNTIL_CANCELLATION_PERIOD = 30
+    MIN_DAYS_UNTIL_CANCELLATION_PERIOD = 6
+    MAX_DAYS_UNTIL_CANCELLATION_PERIOD = 35
+    CANCEL_PERIOD_START = np.datetime64('2018-12-07')
 
     data = read_data_file(__DEF_PATH)
 
-    train, _, test, _ = split_train_test(data, data.cancellation_datetime)
+    train, _, test, _ = split_train_test(data, data.cancellation_datetime, train_proportion=1.)
 
     general_estimator = GeneralCancellationEstimatorBuilder(PERIOD_LENGTH, MIN_DAYS_UNTIL_CANCELLATION_PERIOD,
-                                                            MAX_DAYS_UNTIL_CANCELLATION_PERIOD).build_pipeline(train)
+                                                            MAX_DAYS_UNTIL_CANCELLATION_PERIOD) \
+        .build_pipeline(train, CANCEL_PERIOD_START)
 
-    general_estimator.test_models(test)
+    # general_estimator.test_models(test)
 
-    # export_test_data(pipeline)
+    export_test_data(general_estimator)
