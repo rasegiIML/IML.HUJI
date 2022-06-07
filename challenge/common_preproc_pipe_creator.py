@@ -1,23 +1,54 @@
 import re
 
 import pandas as pd
+from sklearn.compose import make_column_transformer
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import FunctionTransformer
+from sklearn.preprocessing import FunctionTransformer, OneHotEncoder
+
+NONE_OUTPUT_COLUMNS = ['checkin_date',
+                       'checkout_date',
+                       'booking_datetime',
+                       'hotel_live_date',
+                       'hotel_country_code',
+                       'origin_country_code',
+                       'cancellation_policy_code']
+CATEGORICAL_COLUMNS = ['hotel_star_rating',
+                       'guest_nationality_country_name',
+                       'charge_option',
+                       'accommadation_type_name',
+                       'language',
+                       'is_first_booking',
+                       'customer_nationality',
+                       'original_payment_currency',
+                       'is_user_logged_in',
+                       ]
+RELEVANT_COLUMNS = ['no_of_adults',
+                    'no_of_children',
+                    'no_of_extra_bed',
+                    'no_of_room',
+                    'original_selling_amount'] + NONE_OUTPUT_COLUMNS + CATEGORICAL_COLUMNS
 
 
 class CommonPreProcPipeCreator:
     @classmethod
-    def build_pipe(cls, relevant_cols: list):
+    def build_pipe(cls, relevant_cols: list) -> Pipeline:
         pipeline_steps = [('columns selector', FunctionTransformer(lambda df: df[relevant_cols])),
                           ('add time based columns', FunctionTransformer(cls.__add_time_based_cols)),
                           ('add cancellation policy features',
-                           FunctionTransformer(cls.__add_cancellation_policy_features))
+                           FunctionTransformer(cls.__add_cancellation_policy_features)),
+                          ('deal with categorical columns',
+                           make_column_transformer((OneHotEncoder(), CATEGORICAL_COLUMNS), remainder='passthrough'))
                           ]
 
         return Pipeline(pipeline_steps)
 
     @classmethod
     def __add_time_based_cols(cls, df: pd.DataFrame) -> pd.DataFrame:
+        df = df.astype({'checkout_date': 'datetime64',
+                        'checkin_date': 'datetime64',
+                        'booking_datetime': 'datetime64',
+                        'hotel_live_date': 'datetime64'})
+
         df['stay_length'] = cls.__get_days_between_dates(df.checkout_date, df.checkin_date)
         df['time_registered_pre_book'] = cls.__get_days_between_dates(df.checkin_date, df.hotel_live_date)
         df['booking_to_arrival_time'] = cls.__get_days_between_dates(df.checkin_date, df.booking_datetime)
@@ -107,26 +138,4 @@ class CommonPreProcPipeCreator:
 
 
 if __name__ == '__main__':
-    NONE_OUTPUT_COLUMNS = ['checkin_date',
-                           'checkout_date',
-                           'booking_datetime',
-                           'hotel_live_date',
-                           'hotel_country_code',
-                           'origin_country_code',
-                           'cancellation_policy_code']
-    CATEGORICAL_COLUMNS = ['hotel_star_rating',
-                           'guest_nationality_country_name',
-                           'charge_option',
-                           'accommadation_type_name',
-                           'language',
-                           'is_first_booking',
-                           'customer_nationality',
-                           'original_payment_currency',
-                           'is_user_logged_in',
-                           ]
-    RELEVANT_COLUMNS = ['no_of_adults',
-                        'no_of_children',
-                        'no_of_extra_bed',
-                        'no_of_room',
-                        'original_selling_amount'] + NONE_OUTPUT_COLUMNS + CATEGORICAL_COLUMNS
     CommonPreProcPipeCreator.build_pipe(RELEVANT_COLUMNS)
