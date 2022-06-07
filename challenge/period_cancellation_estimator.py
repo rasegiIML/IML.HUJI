@@ -5,7 +5,8 @@ from typing import NoReturn
 import numpy as np
 import pandas as pd
 from sklearn.ensemble import RandomForestClassifier
-from sklearn.metrics import RocCurveDisplay, accuracy_score
+from sklearn.metrics import RocCurveDisplay, accuracy_score, f1_score
+from sklearn.naive_bayes import MultinomialNB, GaussianNB
 
 from IMLearn.base import BaseEstimator
 
@@ -38,4 +39,4 @@ class PeriodCancellationEstimator(BaseEstimator):
         RocCurveDisplay.from_estimator(self._fit_model, X, y)
 
     def score(self, X: pd.DataFrame, y: pd.Series):
-        return accuracy_score(y, self._predict(X))
+        return f1_score(y, self._predict(X), average='macro')
