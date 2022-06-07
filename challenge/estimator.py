@@ -10,10 +10,9 @@ from sklearn.metrics import RocCurveDisplay, f1_score
 
 
 class PeriodCancellationEstimator(BaseEstimator):
-    def __init__(self, threshold: float = 0.5) -> PeriodCancellationEstimator:
+    def __init__(self) -> PeriodCancellationEstimator:
         super().__init__()
         self._fit_model: RandomForestClassifier = None
-        self.thresh = threshold
 
     def get_params(self, deep=False):
         return {'threshold': self.thresh}
@@ -27,8 +26,7 @@ class PeriodCancellationEstimator(BaseEstimator):
         self._fit_model = RandomForestClassifier(random_state=0).fit(X, y)
 
     def _predict(self, X: pd.DataFrame) -> np.ndarray:
-        probs = 1 - self._fit_model.predict_proba(X)[:, 0]
-        return probs > self.thresh
+        return self._fit_model.predict(X)
 
     def plot_roc_curve(self, X: np.ndarray, y: np.ndarray):
         RocCurveDisplay.from_estimator(self._fit_model, X, y)
